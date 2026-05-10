@@ -1125,9 +1125,9 @@ function LandingPage({ tournaments, onSelect, onCreate, onDelete, isLoading }: {
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#1a1a2e] text-white flex flex-col font-sans">
-      {/* Background decoration */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20">
+    <div className="min-h-screen bg-[#1a1a2e] text-white font-sans overflow-x-hidden pb-12">
+      {/* Background decoration - absolute or fixed to stay behind content */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20 z-0">
         <Trophy className="absolute -top-24 -right-24 w-[600px] h-[600px] text-white rotate-12" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#e94560]/10 rounded-full blur-[120px]" />
       </div>
