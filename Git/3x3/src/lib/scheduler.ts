@@ -49,8 +49,9 @@ export function parseTeams(input: string): Team[] {
   }).filter((t): t is Team => t !== null);
 }
 
-export function formatTime(date: Date): string {
-  return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+export function formatTime(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 }
 
 interface Matchup {
