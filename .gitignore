@@ -1,0 +1,34 @@
+# Carpetas de otros proyectos
+Admin/
+AppMatchDownloader/
+DBStats/
+FitApp/
+Padel/
+Scraper/
+fitapp\ 2/
+iOS/
+matchDownloader/
+matchOnline/
+tmp/
+-Android-/
+Extension/
+Logos/
+Players/
+SEGONA\ FASE\ -\ NIVELL\ B1\ -\ 04/
+TERCERA\ FASE\ -\ NIVELL\ B1\ -\ 02/
+CT\ PRE-INFANTIL/
+Víctor/
+json\ Partidos/
+fitapp.zip
+
+# Archivos de sistema
+.DS_Store
+**/.DS_Store
+
+# Dependencias
+node_modules/
+.env.local
+
+# Build
+dist/
+build/
