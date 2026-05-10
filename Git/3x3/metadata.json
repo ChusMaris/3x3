@@ -1,0 +1,6 @@
+{
+  "name": "BasketTime Scheduler",
+  "description": "Generador de calendarios para torneos de baloncesto con gestión de pistas y categorías.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
