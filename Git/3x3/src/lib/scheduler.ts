@@ -24,6 +24,7 @@ export interface Match {
 
 export interface ScheduleConfig {
   courts: number;
+  lowRimCourts: number;
   gameDuration: number;
   breakDuration: number;
   startTime: string; // "09:30"
@@ -167,7 +168,7 @@ export function generateSchedule(teams: Team[], config: ScheduleConfig): Match[]
   let courts = Array.from({ length: config.courts }, (_, i) => ({
     id: i + 1,
     nextAvailable: baseTime.getTime(),
-    isSmallBasket: (i + 1) <= 2
+    isSmallBasket: (i + 1) <= config.lowRimCourts
   }));
 
   const isSmallBasketCat = (cat: string) => {

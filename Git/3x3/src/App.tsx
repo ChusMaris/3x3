@@ -17,6 +17,10 @@ import {
   Trash2,
   Download,
   AlertCircle,
+  Filter,
+  List,
+  Menu,
+  X,
   Hash,
   LayoutGrid,
   ListOrdered,
@@ -36,9 +40,18 @@ interface Tournament {
     matches: Match[];
     config: ScheduleConfig;
     teamInput: string;
+    teamsByCategory?: Record<string, string[]>;
   };
   created_at: string;
 }
+
+const INITIAL_CATEGORIES = [
+  "BEN M", "BEN F", 
+  "ALV M", "ALV F", 
+  "INF M", "INF F", 
+  "CAD M", "CAD F",
+  "JUN M", "JUN F"
+];
 
 const DEFAULT_TEAMS_INPUT = `BEN M,Elite
 BEN M,Makina
@@ -85,12 +98,33 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [teamInput, setTeamInput] = useState(DEFAULT_TEAMS_INPUT);
+  const [appCategories, setAppCategories] = useState<string[]>(() => {
+    const saved = localStorage.getItem('app_categories');
+    return saved ? JSON.parse(saved) : INITIAL_CATEGORIES;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('app_categories', JSON.stringify(appCategories));
+  }, [appCategories]);
+
+  const [teamsByCategory, setTeamsByCategory] = useState<Record<string, string[]>>({});
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [tournamentView, setTournamentView] = useState<'matches' | 'teams'>('matches');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  const teamInput = useMemo(() => {
+    return (Object.entries(teamsByCategory) as [string, string[]][])
+      .map(([cat, tmList]) => tmList.map(name => `${cat},${name}`).join('\n'))
+      .filter(line => line !== '')
+      .join('\n');
+  }, [teamsByCategory]);
+
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [filterCat, setFilterCat] = useState<string>('all');
   const [filterCourt, setFilterCourt] = useState<string>('all');
   const [config, setConfig] = useState<ScheduleConfig>({
     courts: 5,
+    lowRimCourts: 2,
     gameDuration: 10,
     breakDuration: 5,
     startTime: "09:30",
@@ -118,7 +152,7 @@ export default function App() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setTournaments(data || []);
+      setTournaments((data as unknown as Tournament[]) || []);
     } catch (e) {
       console.error("Error fetching tournaments:", e);
       setError("No se pudieron cargar los torneos de la base de datos.");
@@ -129,7 +163,27 @@ export default function App() {
 
   const handleSelectTournament = (t: Tournament) => {
     setCurrentTournament(t);
-    setTeamInput(t.data.teamInput || '');
+    
+    // Legacy migration + loading
+    const teamsData = t.data.teamsByCategory as Record<string, string[]> | undefined;
+    if (teamsData && Object.keys(teamsData).length > 0) {
+      setTeamsByCategory(teamsData);
+    } else if (t.data.teamInput) {
+      // Parse legacy string input
+      const parsed = parseTeams(t.data.teamInput);
+      const mig: Record<string, string[]> = {};
+      parsed.forEach(team => {
+        if (!mig[team.category]) mig[team.category] = [];
+        mig[team.category].push(team.name);
+      });
+      setTeamsByCategory(mig);
+    } else {
+      setTeamsByCategory({});
+    }
+    
+    // Reset active tab to first category that has teams, or first in list
+    const firstCat = Object.keys(t.data.teamsByCategory || {}).sort()[0] || appCategories[0];
+    setActiveTab(firstCat);
     
     // Convert string dates back to Date objects
     const restoredMatches = (t.data.matches || []).map(m => ({
@@ -141,6 +195,7 @@ export default function App() {
     setMatches(restoredMatches);
     setConfig(t.data.config || {
       courts: 5,
+      lowRimCourts: 2,
       gameDuration: 10,
       breakDuration: 5,
       startTime: "09:30",
@@ -156,7 +211,8 @@ export default function App() {
       const updatedData = {
         matches,
         config,
-        teamInput
+        teamInput,
+        teamsByCategory
       };
 
       const { error } = await supabase
@@ -183,13 +239,15 @@ export default function App() {
         matches: [],
         config: {
           courts: 5,
+          lowRimCourts: 2,
           gameDuration: 10,
           breakDuration: 5,
           startTime: "09:30",
           generalBreakTime: "11:30",
           generalBreakDuration: 15
         },
-        teamInput: ""
+        teamInput: "",
+        teamsByCategory: {}
       };
 
       const { data, error } = await supabase
@@ -472,70 +530,58 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-slate-50 font-sans text-slate-900">
       {/* Top Header */}
-      <header className="bg-[#1a1a2e] text-white py-4 px-8 border-b-4 border-[#e94560] flex items-center justify-between shadow-xl shrink-0">
-        <div className="flex items-center gap-4">
+      <header className="bg-[#1a1a2e] text-white py-3 md:py-4 px-4 md:px-8 border-b-4 border-[#e94560] flex items-center justify-between shadow-xl shrink-0 gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           <button 
             onClick={() => setCurrentTournament(null)}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors border border-white/10 mr-2"
+            className="p-2 hover:bg-white/10 rounded-lg transition-colors border border-white/10"
             title="Volver al inicio"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
           </button>
-          <div className="bg-[#e94560] p-2 rounded-lg transform -rotate-3">
-            <Trophy className="w-8 h-8 text-white" />
+          <div className="hidden sm:block bg-[#e94560] p-1.5 md:p-2 rounded-lg transform -rotate-3">
+            <Trophy className="w-5 h-5 md:w-8 md:h-8 text-white" />
           </div>
-          <div>
-            <h1 className="text-xl font-black italic tracking-tighter uppercase leading-none">
-              {currentTournament.name} <span className="text-[#e94560]">3x3</span>
+          <div className="min-w-0">
+            <h1 className="text-sm md:text-xl font-black italic tracking-tighter uppercase leading-none truncate">
+              {currentTournament.name} <span className="text-[#e94560] hidden xs:inline">3x3</span>
             </h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-              {new Date(currentTournament.event_date).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            <p className="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 truncate">
+              {new Date(currentTournament.event_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
             </p>
           </div>
         </div>
 
-        <div className="flex gap-4 items-center">
-          <button 
-            onClick={saveTournament}
-            disabled={isSaving}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black transition-all ${isSaving ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-[#e94560] hover:bg-[#ff516f] text-white shadow-lg active:scale-95'}`}
-          >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {isSaving ? 'GUARDANDO...' : 'GUARDAR CAMBIOS'}
-          </button>
-
-          <div className="h-8 w-px bg-slate-700" />
-          <div className="flex bg-[#16213e] rounded-xl p-1 border border-slate-700 shadow-inner">
+        <div className="flex gap-2 md:gap-4 items-center">
+          <div className="flex bg-[#16213e] rounded-xl p-1 border border-slate-700 shadow-inner overflow-x-auto no-scrollbar">
             <button 
-              onClick={() => setViewMode('grid')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] font-black transition-all ${viewMode === 'grid' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              onClick={() => setTournamentView('teams')}
+              className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-[9px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'teams' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
             >
-              <LayoutGrid className="w-4 h-4" /> PISTAS
+              <Users className="w-3.5 h-3.5 md:w-4 md:h-4" /> <span className="hidden sm:inline">EQUIPOS</span>
             </button>
             <button 
-              onClick={() => setViewMode('calendar')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] font-black transition-all ${viewMode === 'calendar' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              onClick={() => { setTournamentView('matches'); if (viewMode === 'classification') setViewMode('grid'); }}
+              className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-[9px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'matches' && (viewMode === 'grid' || viewMode === 'calendar') ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
             >
-              <Users className="w-4 h-4" /> CALENDARIO
+              <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4" /> <span className="hidden sm:inline">CALENDARIO</span>
             </button>
             <button 
-              onClick={() => setViewMode('classification')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] font-black transition-all ${viewMode === 'classification' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              onClick={() => { setTournamentView('matches'); setViewMode('classification'); }}
+              className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-[9px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'matches' && viewMode === 'classification' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
             >
-              <ListOrdered className="w-4 h-4" /> CLASIFICACIÓN
+              <ListOrdered className="w-3.5 h-3.5 md:w-4 md:h-4" /> <span className="hidden sm:inline">CLASIFICACIÓN</span>
             </button>
           </div>
           
-          <div className="h-8 w-px bg-slate-700" />
-          
-          <div className="flex gap-6 text-right">
-            <div>
+          <div className="hidden lg:flex items-center gap-4 border-l border-slate-700 pl-4">
+            <div className="text-right">
               <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Canchas</p>
-              <p className="font-mono text-xl font-black text-[#e94560] leading-none">{config.courts}</p>
+              <p className="font-mono text-lg font-black text-[#e94560] leading-none">{config.courts}</p>
             </div>
-            <div>
-              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Final Prep</p>
-              <p className="font-mono text-xl font-black text-white leading-none">
+            <div className="text-right">
+              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Fin Previsto</p>
+              <p className="font-mono text-lg font-black text-white leading-none">
                 {matches.length > 0 ? formatTime(matches[matches.length-1].endTime) : '--:--'}
               </p>
             </div>
@@ -543,9 +589,35 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex flex-1 overflow-hidden">
+      <main className="flex h-screen bg-slate-900 font-sans overflow-hidden relative">
+        {/* Mobile Overlay */}
+        <AnimatePresence>
+          {isSidebarOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+            />
+          )}
+        </AnimatePresence>
+
         {/* Sidebar */}
-        <aside className="w-80 bg-white border-r border-slate-200 flex flex-col shadow-2xl shrink-0 z-10">
+        <aside className={`
+          fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-slate-200 flex flex-col shadow-2xl shrink-0 transition-transform duration-300 transform
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:relative md:translate-x-0 md:flex
+        `}>
+          <div className="flex items-center justify-between p-6 border-b border-slate-100 md:hidden bg-[#1a1a2e] text-white">
+            <div className="flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-[#e94560]" />
+              <span className="font-black italic text-sm tracking-tighter">CONFIGURACIÓN</span>
+            </div>
+            <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-white/10 rounded-lg">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
           <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
             <section>
               <div className="flex items-center gap-2 mb-4">
@@ -553,17 +625,13 @@ export default function App() {
                 <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Ajustes del Torneo</h2>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Pistas Totales</label>
-                  <div className="flex items-center justify-between">
-                    <button onClick={() => setConfig(c => ({...c, courts: Math.max(1, c.courts - 1)}))} className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-400 transition-colors">
-                      <Plus className="w-4 h-4 rotate-45" />
-                    </button>
-                    <span className="font-mono text-xl font-black">{config.courts}</span>
-                    <button onClick={() => setConfig(c => ({...c, courts: c.courts + 1}))} className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-400 transition-colors">
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <input type="number" value={config.courts} onChange={e => setConfig(c => ({...c, courts: Math.max(1, +e.target.value)}))} className="w-full bg-transparent font-mono font-black text-lg outline-none" />
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <label className="text-[9px] font-black text-[#e94560] uppercase block mb-1">Pistas Aro Bajo</label>
+                  <input type="number" value={config.lowRimCourts} onChange={e => setConfig(c => ({...c, lowRimCourts: Math.max(0, +e.target.value)}))} className="w-full bg-transparent font-mono font-black text-lg outline-none" />
                 </div>
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Juego (m)</label>
@@ -584,20 +652,43 @@ export default function App() {
               </div>
             </section>
 
-            <section className="flex flex-col h-[400px]">
-              <div className="flex items-center justify-between mb-4">
+            {/* Inscripciones Summary */}
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-[#e94560]" />
-                  <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Equipos</h2>
+                  <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Resumen Equipos</h2>
                 </div>
-                <span className="text-[10px] font-black bg-slate-900 text-white px-2 py-0.5 rounded-full">{teams.length}</span>
+                <div className="flex gap-2">
+                  <span className="text-[10px] font-black bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full uppercase" title="Equipos totales">
+                    {teams.length} Q
+                  </span>
+                </div>
               </div>
-              <textarea 
-                className="flex-1 w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-[11px] font-mono resize-none focus:ring-4 focus:ring-[#e94560]/10 focus:border-[#e94560] outline-none transition-all"
-                value={teamInput}
-                onChange={e => setTeamInput(e.target.value)}
-                placeholder="CATEGORIA TAB EQUIPO"
-              />
+              
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
+                {(Object.entries(teamsByCategory) as [string, string[]][]).filter(([_, list]) => list.length > 0).length === 0 ? (
+                  <p className="text-[9px] font-bold text-slate-400 italic text-center py-2">Sin equipos inscritos</p>
+                ) : (
+                  (Object.entries(teamsByCategory) as [string, string[]][]).map(([cat, list]) => (
+                    list.length > 0 && (
+                      <div key={cat} className="flex items-center justify-between text-[10px]">
+                        <span className="font-black text-slate-400">{cat}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-slate-900 font-black">{list.length}</span>
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#e94560]" />
+                        </div>
+                      </div>
+                    )
+                  ))
+                )}
+                <button 
+                  onClick={() => setTournamentView('teams')}
+                  className="w-full mt-2 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-500 uppercase tracking-widest hover:border-[#e94560] hover:text-[#e94560] transition-all"
+                >
+                  GESTIONAR INSCRIPCIONES
+                </button>
+              </div>
             </section>
           </div>
           
@@ -618,321 +709,240 @@ export default function App() {
         </aside>
 
         {/* Content Area */}
-        <section className="flex-1 bg-slate-100 overflow-hidden flex flex-col">
-          {matches.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-slate-300">
-              <Trophy className="w-24 h-24 mb-4 opacity-10" />
-              <p className="text-sm font-black uppercase tracking-widest">Configura y pulsa "Generar" para ver los cruces</p>
+        <section className="flex-1 bg-slate-100 overflow-hidden flex flex-col min-w-0">
+          {/* Tournament Actions Bar */}
+          <div className="bg-white border-b border-slate-200 px-4 md:px-8 py-3 flex items-center justify-between shrink-0 gap-4">
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2 bg-slate-100 rounded-lg md:hidden text-[#1a1a2e] hover:bg-slate-200 transition-colors"
+                title="Abrir configuración"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:block">
+                {tournamentView === 'teams' ? 'Gestión de Equipos' : viewMode === 'grid' ? 'Vista de Pistas' : viewMode === 'calendar' ? 'Calendario Completo' : 'Clasificación'}
+              </h2>
             </div>
-          ) : viewMode === 'grid' ? (
-            <div className="flex-1 flex flex-col overflow-hidden">
-               {/* Grid Header & Highlight Controller */}
-               <div className="bg-white border-b border-slate-200 p-3 flex items-center justify-between gap-4 shrink-0 px-6">
-                 <div className="flex items-center gap-3">
-                   <div className="flex items-center gap-2">
-                     <Search className="w-4 h-4 text-slate-400" />
-                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Resaltar Equipo:</span>
-                   </div>
-                   <select 
-                     value={highlightedTeam || ''} 
-                     onChange={e => setHighlightedTeam(e.target.value || null)}
-                     className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] font-bold focus:ring-2 focus:ring-[#e94560]/20 outline-none min-w-[200px]"
-                   >
-                     <option value="">Ninguno (Todos visibles)</option>
-                     {teamNames.map(name => (
-                       <option key={name} value={name}>{name}</option>
-                     ))}
-                   </select>
-                   {highlightedTeam && (
-                     <button 
-                       onClick={() => setHighlightedTeam(null)}
-                       className="text-[10px] font-black text-[#e94560] uppercase tracking-widest hover:underline"
+            <div className="flex items-center gap-3 shrink-0">
+              <button 
+                onClick={saveTournament}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#1a1a2e] text-white rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all disabled:opacity-50"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{isSaving ? 'Guardando...' : 'GUARDAR'}</span>
+              </button>
+            </div>
+          </div>
+
+          {tournamentView === 'matches' ? (
+            matches.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-slate-300">
+                <Trophy className="w-24 h-24 mb-4 opacity-10" />
+                <p className="text-sm font-black uppercase tracking-widest">Configura y pulsa "Generar" para ver los cruces</p>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {(viewMode === 'grid' || viewMode === 'calendar') ? (
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    {/* Unified Header with Toggle and Filters */}
+                    <div className="bg-white border-b border-slate-200 p-4 flex flex-wrap gap-4 items-center shrink-0 px-4 md:px-8 shadow-sm z-20">
+                       <div className="flex bg-slate-100 p-1 rounded-xl shrink-0">
+                         <button 
+                           onClick={() => setViewMode('grid')}
+                           className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${viewMode === 'grid' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                         >
+                           POR PISTA
+                         </button>
+                         <button 
+                           onClick={() => setViewMode('calendar')}
+                           className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${viewMode === 'calendar' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                         >
+                           CRONOLÓGICO
+                         </button>
+                       </div>
+
+                       <div className="flex items-center gap-3">
+                         <Search className="w-4 h-4 text-slate-400" />
+                         <select 
+                           value={highlightedTeam || ''} 
+                           onChange={e => setHighlightedTeam(e.target.value || null)}
+                           className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] font-bold focus:ring-2 focus:ring-[#e94560]/20 outline-none min-w-[180px]"
+                         >
+                           <option value="">Resaltar Equipo (Todos)</option>
+                           {teamNames.map(name => (
+                             <option key={name} value={name}>{name}</option>
+                           ))}
+                         </select>
+                       </div>
+
+                       <div className="ml-auto text-[10px] font-black text-slate-400 shrink-0">Total: {filteredMatches.length} partidos</div>
+                    </div>
+                    
+                    {viewMode === 'grid' ? (
+                      <div className="flex-1 flex flex-col overflow-hidden">
+                        <div 
+                          className="grid bg-[#1a1a2e] text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-800 shrink-0 select-none z-10"
+                       style={{ gridTemplateColumns: `120px repeat(${config.courts}, 1fr)` }}
                      >
-                       Limpiar
-                     </button>
-                   )}
-                 </div>
-                 
-                 <div className="flex gap-4 items-center">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-full bg-[#e94560]" />
-                      <span className="text-[9px] font-bold text-slate-500 uppercase">Pista Principal</span>
-                    </div>
-                    <div className="h-4 w-px bg-slate-200" />
-                    <div className="flex items-center gap-1.5 opacity-50">
-                      <div className="w-2 h-2 rounded-full bg-slate-300" />
-                      <span className="text-[9px] font-bold text-slate-500 uppercase">Sin Jugador Resaltado</span>
-                    </div>
-                 </div>
-               </div>
+                       <div className="py-4 px-6 border-r border-slate-800">Horario</div>
+                        {Array.from({ length: config.courts }).map((_, i) => (
+                          <div key={i} className={`py-4 px-6 text-center ${i < config.courts - 1 ? 'border-r border-slate-800' : ''}`}>
+                            Pista {i + 1}
+                            {i < config.lowRimCourts && (
+                              <span className="block text-[7px] text-[#e94560] mt-1 font-black tracking-tighter uppercase">Aro Bajo</span>
+                            )}
+                          </div>
+                        ))}
+                     </div>
 
-               <div 
-                 className="grid bg-[#1a1a2e] text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-800 shrink-0 select-none z-10"
-                 style={{ gridTemplateColumns: `120px repeat(${config.courts}, 1fr)` }}
-               >
-                 <div className="py-4 px-6 border-r border-slate-800">Horario</div>
-                 {Array.from({ length: config.courts }).map((_, i) => (
-                   <div key={i} className={`py-4 px-6 text-center ${i < config.courts - 1 ? 'border-r border-slate-800' : ''}`}>
-                     Pista {i + 1}
-                     {i < 2 && <span className="block text-[7px] text-[#e94560] mt-1 font-bold tracking-tighter">Aro Bajo</span>}
-                   </div>
-                 ))}
-               </div>
-
-               <div className="flex-1 overflow-y-auto bg-slate-300/50 custom-scrollbar">
-                  <div className="flex flex-col min-w-min">
-                    <AnimatePresence>
-                      {groupedMatchesByTime.map(([time, slotMatches], idx) => (
-                        <div key={time} className="contents">
-                          <motion.div 
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: idx * 0.02 }}
-                            className="grid border-b border-white/20 min-h-[90px]"
-                            style={{ gridTemplateColumns: `120px repeat(${config.courts}, 1fr)` }}
-                          >
-                            <div className="bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center border-r border-slate-200 px-4">
-                               <Clock className="w-3 h-3 mb-1 text-slate-300" />
-                               <span className="font-mono text-base font-black text-slate-700">{time}</span>
-                               <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-1">Inicio</span>
-                            </div>
-
-                            {Array.from({ length: config.courts }).map((_, courtIdx) => {
-                               const match = slotMatches.find(m => m.court === courtIdx + 1);
-                               const isHighlighted = highlightedTeam 
-                                 ? (match?.team1 === highlightedTeam || match?.team2 === highlightedTeam)
-                                 : true;
-                               
-                               const isOtherHighlighted = highlightedTeam && !isHighlighted;
-
-                               return (
-                                 <div key={courtIdx} className={`p-1.5 bg-white relative hover:bg-slate-50 transition-all ${courtIdx < config.courts - 1 ? 'border-r border-slate-100' : ''}`}>
-                                    {match ? (
-                                      <div className={`h-full rounded-lg border-l-4 p-3 shadow-sm flex flex-col justify-center transition-all cursor-pointer group ${getCatStyles(match.category)} ${isOtherHighlighted ? 'opacity-10 grayscale scale-95 blur-[0.5px]' : 'opacity-100 ring-2 ring-transparent'} ${highlightedTeam && isHighlighted ? 'ring-[#e94560] ring-offset-2 scale-105 z-20 shadow-2xl bg-white brightness-110' : ''}`}>
-                                        <div className="flex justify-between items-start mb-2">
-                                          <p className="text-[8px] font-black uppercase tracking-tighter opacity-80 truncate">{match.category}</p>
-                                          {match.phase.includes('Final') || match.phase.includes('Semi') ? (
-                                            <span className="bg-slate-900 text-white text-[7px] font-black px-1.5 py-0.5 rounded leading-none shrink-0">{match.phase}</span>
+                     <div className="flex-1 overflow-auto bg-slate-300/50 custom-scrollbar">
+                        <div className="flex flex-col min-w-[800px] md:min-w-min">
+                          <AnimatePresence>
+                            {groupedMatchesByTime.map(([time, slotMatches], idx) => (
+                              <div key={time} className="contents">
+                                <div 
+                                  className="grid border-b border-white/20 min-h-[90px]"
+                                  style={{ gridTemplateColumns: `120px repeat(${config.courts}, 1fr)` }}
+                                >
+                                  <div className="bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center border-r border-slate-200 px-4">
+                                     <span className="font-mono text-base font-black text-slate-700">{time}</span>
+                                  </div>
+                                  {Array.from({ length: config.courts }).map((_, courtIdx) => {
+                                     const match = slotMatches.find(m => m.court === courtIdx + 1);
+                                     const isHighlighted = highlightedTeam ? (match?.team1 === highlightedTeam || match?.team2 === highlightedTeam) : true;
+                                     const isOtherHighlighted = highlightedTeam && !isHighlighted;
+                                     return (
+                                       <div key={courtIdx} className={`p-1.5 bg-white relative ${courtIdx < config.courts - 1 ? 'border-r border-slate-100' : ''}`}>
+                                          {match ? (
+                                            <div className={`h-full rounded-lg border-l-4 p-3 shadow-sm flex flex-col justify-center ${getCatStyles(match.category)} ${isOtherHighlighted ? 'opacity-10 grayscale scale-95' : 'opacity-100'} ${highlightedTeam && isHighlighted ? 'ring-2 ring-[#e94560] scale-105 z-20 bg-white' : ''}`}>
+                                              <div className="flex justify-between items-start mb-1">
+                                                <p className="text-[7px] font-black uppercase opacity-60">{match.category}</p>
+                                                {match.court <= config.lowRimCourts && (
+                                                  <span className="text-[6px] font-black bg-[#e94560] text-white px-1 rounded-sm leading-tight">ARO BAJO</span>
+                                                )}
+                                              </div>
+                                              <div className="text-[10px] font-bold leading-tight flex flex-col gap-0.5">
+                                                <span className="truncate">{match.team1}</span>
+                                                <span className="text-slate-300 font-black italic text-[7px]">VS</span>
+                                                <span className="truncate">{match.team2}</span>
+                                              </div>
+                                            </div>
                                           ) : null}
-                                        </div>
-                                        <div className="text-[11px] font-bold leading-tight flex flex-col gap-1 items-center">
-                                          <span 
-                                            onClick={(e) => { e.stopPropagation(); setHighlightedTeam(match.team1); }}
-                                            className={`truncate w-full text-center hover:text-[#e94560] transition-colors ${highlightedTeam === match.team1 ? 'text-[#e94560] font-black' : 'text-slate-900'}`}
-                                          >
-                                            {match.team1}
-                                          </span>
-                                          <span className="text-slate-300 font-black italic text-[8px] group-hover:text-[#e94560]">VS</span>
-                                          <span 
-                                            onClick={(e) => { e.stopPropagation(); setHighlightedTeam(match.team2); }}
-                                            className={`truncate w-full text-center hover:text-[#e94560] transition-colors ${highlightedTeam === match.team2 ? 'text-[#e94560] font-black' : 'text-slate-900'}`}
-                                          >
-                                            {match.team2}
-                                          </span>
-                                        </div>
-                                        {match.score1 !== undefined && (
-                                          <div className="mt-2 text-center">
-                                            <span className="bg-white text-slate-900 px-2 py-0.5 rounded-full text-[10px] font-black border border-slate-200">
-                                              {match.score1} - {match.score2}
-                                            </span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ) : (
-                                       <div className="h-full border-2 border-dashed border-slate-100/50 rounded-lg flex items-center justify-center opacity-30">
-                                         <p className="text-[7px] font-black uppercase tracking-widest text-slate-400">Libre</p>
                                        </div>
-                                    )}
-                                 </div>
-                               )
-                            })}
-                          </motion.div>
-                           
-                           {idx < groupedMatchesByTime.length - 1 && (
-                             <div className="h-6 bg-slate-400/20 flex items-center px-6 relative border-b border-white/10">
-                               <div className="w-full h-px bg-white/20" />
-                               <span className="absolute left-[140px] px-3 py-1 bg-[#1a1a2e] rounded-full text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] shadow-sm">
-                                 Pausa {config.breakDuration} min
-                               </span>
-                             </div>
-                           )}
+                                     )
+                                  })}
+                                </div>
+                                {idx < groupedMatchesByTime.length - 1 && (
+                                  <div className="h-6 bg-slate-400/10 flex items-center px-6 relative border-b border-white/5">
+                                    <div className="w-full h-px bg-white/10" />
+                                    <span className="absolute left-[140px] px-3 py-1 bg-[#1a1a2e] rounded-full text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] shadow-sm">
+                                      Pausa {config.breakDuration} min
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </AnimatePresence>
                         </div>
-                      ))}
-                    </AnimatePresence>
-                  </div>
-               </div>
-            </div>
-          ) : viewMode === 'calendar' ? (
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Filter Bar */}
-              <div className="bg-white border-b border-slate-200 p-4 flex gap-4 items-center shrink-0">
-                <div className="flex items-center gap-2">
-                  <Search className="w-4 h-4 text-slate-400" />
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Filtros:</span>
-                </div>
-                
-                <select 
-                  value={filterCat} 
-                  onChange={e => setFilterCat(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] font-bold focus:ring-2 focus:ring-[#e94560]/20 outline-none"
-                >
-                  <option value="all">Todas las Categorías / Fases</option>
-                  <optgroup label="Categorías">
-                    {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </optgroup>
-                  <optgroup label="Fases">
-                    {phases.map(p => <option key={p} value={p}>{p}</option>)}
-                  </optgroup>
-                </select>
-
-                <select 
-                  value={filterCourt} 
-                  onChange={e => setFilterCourt(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] font-bold focus:ring-2 focus:ring-[#e94560]/20 outline-none"
-                >
-                  <option value="all">Todas las Pistas</option>
-                  {courtNumbers.map(c => <option key={c} value={c}>Pista {c}</option>)}
-                </select>
-
-                <button 
-                  onClick={() => { setFilterCat('all'); setFilterCourt('all'); }}
-                  className="text-[10px] font-black text-[#e94560] uppercase tracking-widest hover:underline"
-                >
-                  Limpiar
-                </button>
-
-                <div className="ml-auto text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Resultados: <span className="text-slate-900">{filteredMatches.length}</span>
-                </div>
-              </div>
-
-              {/* Table Header */}
-              <div className="bg-[#1a1a2e] text-slate-400 py-3 px-6 grid grid-cols-12 gap-4 text-[10px] font-black uppercase tracking-widest shrink-0 border-b border-white/5">
-                <div className="col-span-1">Cod</div>
-                <div className="col-span-2">Cat / Fase</div>
-                <div className="col-span-1 text-center">Hora</div>
-                <div className="col-span-1 text-center">Pista</div>
-                <div className="col-span-7 grid grid-cols-7 items-center">
-                  <div className="col-span-3 text-right">Equipo 1</div>
-                  <div className="col-span-1 text-center">Resultado</div>
-                  <div className="col-span-3 text-left">Equipo 2</div>
-                </div>
-              </div>
-
-              {/* Scrollable List */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar">
-                <AnimatePresence>
-                  {filteredMatches.map((m, i) => {
-                    const isFinal = m.phase === 'Final';
-                    const isSemi = m.phase.includes('Semifinal');
-                    const isPlayoff = isFinal || isSemi;
-                    
-                    return (
-                      <motion.div 
-                        key={m.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.01 }}
-                        className={`grid grid-cols-12 gap-4 items-center py-4 px-6 border-b transition-all group relative ${isFinal ? 'bg-[#0f172a] border-[#e94560]/30' : isSemi ? 'bg-[#1a1a2e] border-white/5' : i % 2 === 0 ? 'bg-white border-slate-200' : 'bg-transparent border-slate-200'} hover:z-10`}
-                      >
-                        <div className={`col-span-1 font-mono text-[10px] font-black ${isPlayoff ? 'text-slate-500' : 'text-slate-400 group-hover:text-[#e94560]'}`}>#{m.id}</div>
-                        <div className="col-span-2">
-                          <p className={`text-[10px] font-black uppercase truncate ${isPlayoff ? 'text-[#e94560]' : 'text-slate-900'}`}>{m.category}</p>
-                          <div className="flex items-center gap-1">
-                            {isFinal && <Trophy className="w-2.5 h-2.5 text-amber-500" />}
-                            <p className={`text-[8px] font-bold uppercase tracking-tighter ${isFinal ? 'text-amber-500' : 'text-slate-400'}`}>{m.phase}</p>
-                          </div>
-                        </div>
-                        <div className="col-span-1 text-center">
-                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded font-mono text-xs font-black shadow-sm ${isFinal ? 'bg-amber-500 text-slate-900' : isSemi ? 'bg-[#e94560] text-white' : 'bg-slate-900 text-white'}`}>
-                            {formatTime(m.startTime)}
-                          </span>
-                        </div>
-                        <div className="col-span-1 text-center">
-                          <div className="inline-flex flex-col items-center">
-                            <MapPin className={`w-3 h-3 ${isPlayoff ? 'text-white/20' : 'text-slate-300'}`} />
-                            <span className={`text-xs font-black ${isPlayoff ? 'text-slate-300' : 'text-slate-900'}`}>{m.court}</span>
-                          </div>
-                        </div>
-                        <div className="col-span-7 grid grid-cols-7 items-center gap-4">
-                          <div className="col-span-3 text-right">
-                            <span className={`text-sm font-bold truncate block ${isPlayoff ? 'text-white' : 'text-slate-800'}`}>{m.team1}</span>
-                          </div>
-                          <div className="col-span-1 flex items-center justify-center gap-1">
-                            <input 
-                              type="number" 
-                              className={`w-10 h-8 rounded text-center text-sm font-black border-2 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all ${isPlayoff ? 'bg-white/5 border-white/10 text-white focus:border-[#e94560]' : 'bg-white border-slate-200 text-slate-900 focus:border-[#e94560]'}`}
-                              value={m.score1 ?? ''}
-                              onChange={(e) => {
-                                const val = e.target.value === '' ? undefined : parseInt(e.target.value);
-                                updateScore(m.id, val, m.score2);
-                              }}
-                            />
-                            <span className={`font-black text-[10px] ${isPlayoff ? 'text-white/20' : 'text-slate-300'}`}>-</span>
-                            <input 
-                              type="number" 
-                              className={`w-10 h-8 rounded text-center text-sm font-black border-2 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all ${isPlayoff ? 'bg-white/5 border-white/10 text-white focus:border-[#e94560]' : 'bg-white border-slate-200 text-slate-900 focus:border-[#e94560]'}`}
-                              value={m.score2 ?? ''}
-                              onChange={(e) => {
-                                const val = e.target.value === '' ? undefined : parseInt(e.target.value);
-                                updateScore(m.id, m.score1, val);
-                              }}
-                            />
-                          </div>
-                          <div className="col-span-3 text-left">
-                            <span className={`text-sm font-bold truncate block ${isPlayoff ? 'text-white' : 'text-slate-800'}`}>{m.team2}</span>
-                          </div>
-                        </div>
-                        {isPlayoff && (
-                          <div className={`absolute left-0 top-0 bottom-0 w-1 ${isFinal ? 'bg-amber-500' : 'bg-[#e94560]'}`} />
-                        )}
-                        {isPlayoff && (
-                          <div className="absolute top-0 right-0 p-1 opacity-20 pointer-events-none">
-                            <Trophy className={`w-12 h-12 ${isFinal ? 'text-amber-500' : 'text-white'}`} />
-                          </div>
-                        )}
-                      </motion.div>
-                    );
-                  })}
-                </AnimatePresence>
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto p-8 space-y-12 custom-scrollbar bg-white shadow-inner">
-              {categories.map(cat => {
-                const catData = classification[cat];
-                if (!catData) return null;
-
-                return (
-                  <section key={cat} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="h-10 w-2 bg-[#e94560]" />
-                      <h2 className="text-xl font-black italic uppercase tracking-tighter text-[#1a1a2e]">{cat}</h2>
+                      </div>
                     </div>
-                    
-                    {catData.groups ? (
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {Object.entries(catData.groups as Record<string, any[]>).map(([letter, groupTeams]) => (
-                          <div key={letter} className="space-y-4">
-                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] px-4">Grupo {letter}</h3>
-                            <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                              <ClassificationTable teams={groupTeams} />
+                  ) : (
+                      <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
+                        {groupedMatchesByTime.map(([time, slotMatches]) => (
+                          <div key={time} className="border-b border-slate-100">
+                            <div className="bg-slate-50 px-4 md:px-8 py-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] md:sticky md:top-0 md:z-10">{time}</div>
+                            <div className="divide-y divide-slate-50 min-w-min overflow-x-auto">
+                              {slotMatches.map(m => {
+                                const lowerCat = m.category.toLowerCase();
+                                const isSemi = lowerCat.includes('semi');
+                                const isFinal = lowerCat.includes('final') || lowerCat.includes('3er');
+                                const isSpecial = isSemi || isFinal;
+                                
+                                return (
+                                  <div key={m.id} className={`px-4 md:px-8 py-4 grid grid-cols-[100px_80px_1fr_80px_1fr] md:grid-cols-12 items-center gap-4 hover:bg-slate-50 transition-colors min-w-[650px] md:min-w-0 ${isSpecial ? 'bg-[#1a1a2e] text-white hover:bg-[#252542]' : ''}`}>
+                                    <div className="col-span-1 md:col-span-2 text-[10px] font-black flex flex-col">
+                                      <span className={isSpecial ? 'text-[#e94560]' : 'text-slate-400'}>#{m.id}</span>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={`text-[9px] font-bold ${isSpecial ? 'text-white' : 'text-slate-900'}`}>{m.category}</span>
+                                        {isSpecial && (isFinal ? <Trophy className="w-3 h-3 text-[#e94560]" /> : <MapPin className="w-3 h-3 text-[#e94560]" />)}
+                                      </div>
+                                    </div>
+                                    <div className="text-center md:col-span-1">
+                                      <span className={`px-2 py-1 text-[9px] md:text-[10px] font-black rounded uppercase tracking-tighter whitespace-nowrap ${isSpecial ? 'bg-[#e94560] text-white' : 'bg-slate-900 text-white'}`}>PISTA {m.court}</span>
+                                      {m.court <= config.lowRimCourts && (
+                                        <span className={`block text-[7px] font-black tracking-tighter uppercase mt-0.5 ${isSpecial ? 'text-slate-400' : 'text-[#e94560]'}`}>Aro Bajo</span>
+                                      )}
+                                    </div>
+                                    <div className={`text-right font-bold text-xs md:col-span-3 ${isSpecial ? 'text-white italic' : ''}`}>{m.team1}</div>
+                                    <div className="flex items-center justify-center gap-2 md:col-span-2">
+                                      <input 
+                                        type="number" 
+                                        value={m.score1 ?? ''} 
+                                        onChange={e => updateScore(m.id, e.target.value === '' ? undefined : parseInt(e.target.value), m.score2)}
+                                        className={`w-8 h-8 rounded border text-center text-xs font-black outline-none focus:border-[#e94560] ${isSpecial ? 'bg-white/10 border-white/20 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+                                      />
+                                      <span className={isSpecial ? 'text-[#e94560]' : 'text-slate-300'}>-</span>
+                                      <input 
+                                        type="number" 
+                                        value={m.score2 ?? ''} 
+                                        onChange={e => updateScore(m.id, m.score1, e.target.value === '' ? undefined : parseInt(e.target.value))}
+                                        className={`w-8 h-8 rounded border text-center text-xs font-black outline-none focus:border-[#e94560] ${isSpecial ? 'bg-white/10 border-white/20 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+                                      />
+                                    </div>
+                                    <div className={`font-bold text-xs md:col-span-4 ${isSpecial ? 'text-white italic' : ''}`}>{m.team2}</div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         ))}
                       </div>
-                    ) : (
-                      <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                        <ClassificationTable teams={catData.all} />
-                      </div>
                     )}
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-y-auto p-8 space-y-12 bg-white">
+                    {/* ... existing Classification/List view ... */}
+                    {(categories as string[]).map(cat => {
+                      const catData = classification[cat];
+                      return (
+                        <section key={cat} className="space-y-6">
+                          <h2 className="text-2xl font-black italic uppercase tracking-tighter text-[#1a1a2e]">{cat}</h2>
+                          
+                          {catData?.groups ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                              {Object.entries(catData.groups as Record<string, any[]>).map(([letter, groupTeams]) => (
+                                <div key={letter} className="space-y-4">
+                                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] px-4 text-slate-400">Grupo {letter}</h3>
+                                  <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                                    <ClassificationTable teams={groupTeams} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                              <ClassificationTable teams={catData?.all || []} />
+                            </div>
+                          )}
 
-                    {/* Playoff Bracket Section */}
-                    <PlayoffSection category={cat as string} matches={resolvedMatches} onUpdateScore={updateScore} />
-                  </section>
-                );
-              })}
-            </div>
+                          <PlayoffSection category={cat} matches={resolvedMatches} onUpdateScore={updateScore} />
+                        </section>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          ) : (
+            <TeamsManagementView 
+              appCategories={appCategories}
+              setAppCategories={setAppCategories}
+              teamsByCategory={teamsByCategory}
+              setTeamsByCategory={setTeamsByCategory}
+              initialCategories={INITIAL_CATEGORIES}
+            />
           )}
         </section>
       </main>
@@ -1304,6 +1314,197 @@ function LandingPage({ tournaments, onSelect, onCreate, onDelete, isLoading }: {
           Powered by BRAFA Technology · {new Date().getFullYear()}
         </p>
       </footer>
+    </div>
+  );
+}
+
+function TeamsManagementView({ 
+  appCategories, 
+  setAppCategories, 
+  teamsByCategory, 
+  setTeamsByCategory,
+  initialCategories 
+}: { 
+  appCategories: string[], 
+  setAppCategories: (cats: string[]) => void,
+  teamsByCategory: Record<string, string[]>,
+  setTeamsByCategory: (teams: Record<string, string[]>) => void,
+  initialCategories: string[]
+}) {
+  const [newCatName, setNewCatName] = useState('');
+  const [newTeamInputs, setNewTeamInputs] = useState<Record<string, string>>({});
+
+  const addCategory = () => {
+    if (newCatName && !appCategories.includes(newCatName)) {
+      setAppCategories([...appCategories, newCatName]);
+      setNewCatName('');
+    }
+  };
+
+  const removeCategory = (cat: string) => {
+    setAppCategories(appCategories.filter(c => c !== cat));
+    const newTeams = { ...teamsByCategory };
+    delete newTeams[cat];
+    setTeamsByCategory(newTeams);
+  };
+
+  const addTeamToCategory = (cat: string) => {
+    const teamName = newTeamInputs[cat];
+    if (teamName) {
+      const currentTeams = teamsByCategory[cat] || [];
+      if (!currentTeams.includes(teamName)) {
+        setTeamsByCategory({
+          ...teamsByCategory,
+          [cat]: [...currentTeams, teamName]
+        });
+      }
+      setNewTeamInputs({ ...newTeamInputs, [cat]: '' });
+    }
+  };
+
+  const removeTeamFromCategory = (cat: string, teamName: string) => {
+    const currentTeams = teamsByCategory[cat] || [];
+    setTeamsByCategory({
+      ...teamsByCategory,
+      [cat]: currentTeams.filter(t => t !== teamName)
+    });
+  };
+
+  const totalTeams = Object.values(teamsByCategory).reduce((acc, teams) => acc + teams.length, 0);
+
+  return (
+    <div className="flex-1 overflow-y-auto p-8 bg-slate-50 custom-scrollbar">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Management Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+          <div>
+            <h2 className="text-3xl font-black italic uppercase tracking-tighter text-[#1a1a2e] mb-2">Panel de Inscripciones</h2>
+            <p className="text-slate-500 text-sm font-medium">Gestiona las categorías y equipos registrados para este torneo.</p>
+          </div>
+          <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <div className="text-right">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Inscritos</p>
+              <p className="text-2xl font-black text-[#e94560]">{totalTeams} <span className="text-sm">EQUIPOS</span></p>
+            </div>
+            <div className="w-12 h-12 bg-[#e94560]/10 rounded-xl flex items-center justify-center">
+              <Users className="w-6 h-6 text-[#e94560]" />
+            </div>
+          </div>
+        </div>
+
+        {/* Categories Editor */}
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+              <Filter className="w-4 h-4" /> Configurar Categorías
+            </h3>
+            <div className="flex gap-2">
+               <button 
+                 onClick={() => setAppCategories(initialCategories)}
+                 className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
+               >
+                 Restablecer Predeterminadas
+               </button>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-3">
+            {appCategories.map(cat => (
+              <div key={cat} className="group relative bg-slate-100 px-4 py-2 rounded-xl flex items-center gap-3 border border-slate-200 hover:border-[#e94560]/30 transition-all">
+                <span className="text-[11px] font-bold text-slate-700">{cat}</span>
+                <button 
+                  onClick={() => removeCategory(cat)}
+                  className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={newCatName}
+                onChange={e => setNewCatName(e.target.value)}
+                placeholder="Nueva Categoría..."
+                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-[#e94560] outline-none transition-all w-48"
+                onKeyDown={e => e.key === 'Enter' && addCategory()}
+              />
+              <button 
+                onClick={addCategory}
+                className="bg-[#1a1a2e] text-white p-2 rounded-xl hover:bg-slate-800 transition-all"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Categories Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {appCategories.map(cat => (
+            <div key={cat} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col group hover:shadow-xl transition-all hover:border-[#e94560]/20">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 group-hover:bg-white transition-colors">
+                <div>
+                  <h4 className="text-lg font-black italic uppercase tracking-tighter text-[#1a1a2e]">{cat}</h4>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {teamsByCategory[cat]?.length || 0} Equipos
+                  </p>
+                </div>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${(teamsByCategory[cat] || []).length > 0 ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-300'}`}>
+                  <Users className="w-5 h-5" />
+                </div>
+              </div>
+              
+              <div className="p-6 space-y-4 flex-1 flex flex-col">
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={newTeamInputs[cat] || ''}
+                    onChange={e => setNewTeamInputs({ ...newTeamInputs, [cat]: e.target.value })}
+                    placeholder="Nombre del equipo..."
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-[#e94560] outline-none transition-all"
+                    onKeyDown={e => e.key === 'Enter' && addTeamToCategory(cat)}
+                  />
+                  <button 
+                    onClick={() => addTeamToCategory(cat)}
+                    className="bg-[#e94560] text-white p-2.5 rounded-xl hover:bg-[#ff516f] transition-all"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-2 flex-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                  {(teamsByCategory[cat] || []).length === 0 ? (
+                    <div className="h-20 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-100 rounded-2xl">
+                      <span className="text-[9px] font-black uppercase tracking-widest">Sin equipos</span>
+                    </div>
+                  ) : (
+                    (teamsByCategory[cat] || []).map((team, idx) => (
+                      <motion.div 
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        key={`${cat}-${team}-${idx}`} 
+                        className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group/team border border-transparent hover:border-[#e94560]/10 hover:bg-white hover:shadow-sm transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-black text-slate-300">{(idx + 1).toString().padStart(2, '0')}</span>
+                          <span className="text-xs font-bold text-slate-700">{team}</span>
+                        </div>
+                        <button 
+                          onClick={() => removeTeamFromCategory(cat, team)}
+                          className="opacity-0 group-hover/team:opacity-100 text-slate-300 hover:text-red-500 transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
