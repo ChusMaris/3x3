@@ -30,10 +30,13 @@ import {
   RotateCw,
   Pencil,
   Lock,
-  Unlock
+  Unlock,
+  Circle,
+  CheckCircle2,
+  Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { generateSchedule, parseTeams, Team, Match, ScheduleConfig, formatTime } from './lib/scheduler';
+import { generateSchedule, parseTeams, Team, Match, ScheduleConfig, CourtConfig, formatTime } from './lib/scheduler';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 interface Tournament {
@@ -45,6 +48,7 @@ interface Tournament {
     config: ScheduleConfig;
     teamInput: string;
     teamsByCategory?: Record<string, string[]>;
+    isLocked?: boolean;
   };
   created_at: string;
 }
@@ -54,7 +58,8 @@ const INITIAL_CATEGORIES = [
   "ALV M", "ALV F", 
   "INF M", "INF F", 
   "CAD M", "CAD F",
-  "JUN M", "JUN F"
+  "JUN M", "JUN F",
+  "SEN M", "SEN F"
 ];
 
 const DEFAULT_TEAMS_INPUT = `BEN M,Elite
@@ -114,8 +119,9 @@ export default function App() {
 
   const [teamsByCategory, setTeamsByCategory] = useState<Record<string, string[]>>({});
   const [activeTab, setActiveTab] = useState<string | null>(null);
-  const [tournamentView, setTournamentView] = useState<'matches' | 'teams'>('matches');
+  const [tournamentView, setTournamentView] = useState<'matches' | 'teams' | 'courts'>('matches');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   
   const teamInput = useMemo(() => {
     return (Object.entries(teamsByCategory) as [string, string[]][])
@@ -126,16 +132,23 @@ export default function App() {
 
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [isLocked, setIsLocked] = useState(false);
-  const [filterCat, setFilterCat] = useState<string>('all');
+  const [filterCats, setFilterCats] = useState<string[]>([]);
   const [filterCourt, setFilterCourt] = useState<string>('all');
+  const [showCatFilter, setShowCatFilter] = useState(false);
   const [config, setConfig] = useState<ScheduleConfig>({
-    courts: 5,
-    lowRimCourts: 2,
+    courtConfigs: Array.from({ length: 5 }, (_, i) => ({
+      id: i + 1,
+      rimType: (i + 1) <= 2 ? 'low' : 'normal',
+      allowedCategories: []
+    })),
     gameDuration: 10,
     breakDuration: 5,
     startTime: "09:30",
+    endTime: "14:30",
+    minGamesPerTeam: 3,
     generalBreakTime: "11:30",
-    generalBreakDuration: 15
+    generalBreakDuration: 15,
+    useFillPhase: false
   });
   const [matches, setMatches] = useState<Match[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -143,13 +156,42 @@ export default function App() {
   const teams = useMemo(() => parseTeams(teamInput), [teamInput]);
   const hasScores = useMemo(() => matches.some(m => m.score1 !== undefined || m.score2 !== undefined), [matches]);
 
-  // Auto-generate tournament when config or teams change (ONLY if Open and NO scores)
+  // Auto-generate tournament when config or teams change (ONLY if Open and NO matches exist)
   useEffect(() => {
-    if (!isLocked && teams.length > 0 && !hasScores) {
-      const generated = generateSchedule(teams, config);
-      setMatches(generated);
+    if (!isLocked && teams.length > 0 && !hasScores && matches.length === 0) {
+      try {
+        const generated = generateSchedule(teams, config);
+        setMatches(generated);
+        setError(null);
+      } catch (e) {
+        if (e instanceof Error) {
+          setError(e.message);
+        }
+      }
     }
-  }, [config, teams, isLocked, hasScores]);
+  }, [teams, isLocked, hasScores, config]);
+
+  const toggleFillPhase = () => {
+    const nextVal = !config.useFillPhase;
+    const newConfig = { ...config, useFillPhase: nextVal };
+    setConfig(newConfig);
+    
+    // Si desactivamos, quitamos los partidos de relleno generados automáticamente
+    // Si activamos, mantenemos lo que hay y dejamos que el scheduler rellene los huecos
+    let baseMatches = matches;
+    if (!nextVal) {
+      baseMatches = matches.filter(m => m.phase !== 'Fase Relleno' && m.phase !== 'Min. Partidos');
+    }
+    
+    try {
+      const updated = generateSchedule(teams, newConfig, baseMatches);
+      setMatches(updated);
+      setError(null);
+    } catch (e) {
+      console.error("Error toggling fill phase:", e);
+      setError(e instanceof Error ? e.message : "Error al actualizar fase de relleno");
+    }
+  };
 
   // Fetch all tournaments on mount
   useEffect(() => {
@@ -211,16 +253,39 @@ export default function App() {
     
     setMatches(restoredMatches);
     setIsLocked(t.data.isLocked || false);
-    setConfig({
-      courts: 5,
-      lowRimCourts: 2,
+
+    // Migration logic for old configs
+    let courtConfigs = (t.data.config as any).courtConfigs;
+    if (!courtConfigs) {
+      const courts = (t.data.config as any).courts || 5;
+      const lowRimCourts = (t.data.config as any).lowRimCourts || 0;
+      courtConfigs = Array.from({ length: courts }, (_, i) => ({
+        id: i + 1,
+        rimType: (i + 1) <= lowRimCourts ? 'low' : 'normal',
+        allowedCategories: []
+      }));
+    }
+
+    const newConfig = {
+      courtConfigs,
       gameDuration: 10,
       breakDuration: 5,
       startTime: "09:30",
+      endTime: "14:30",
+      minGamesPerTeam: 3,
       generalBreakTime: "11:30",
       generalBreakDuration: 15,
       ...t.data.config
-    });
+    };
+
+    // Ensure no null/empty strings for critical time values
+    newConfig.startTime = newConfig.startTime || "09:30";
+    newConfig.endTime = newConfig.endTime || "14:30";
+    newConfig.generalBreakTime = newConfig.generalBreakTime || "11:30";
+    newConfig.minGamesPerTeam = newConfig.minGamesPerTeam || 3;
+    newConfig.useFillPhase = newConfig.useFillPhase ?? false;
+
+    setConfig(newConfig);
   };
 
   const refreshCurrentTournament = async () => {
@@ -266,7 +331,9 @@ export default function App() {
       if (error) throw error;
       
       // Update local cache
-      setTournaments(prev => prev.map(t => t.id === currentTournament.id ? { ...t, data: updatedData } : t));
+      const updatedTournament = { ...currentTournament, data: updatedData };
+      setTournaments(prev => prev.map(t => t.id === currentTournament.id ? updatedTournament : t));
+      setCurrentTournament(updatedTournament);
     } catch (e) {
       console.error("Error saving tournament:", e);
       setError("Error al guardar en el servidor.");
@@ -281,11 +348,16 @@ export default function App() {
       const initialData = {
         matches: [],
         config: {
-          courts: 5,
-          lowRimCourts: 2,
+          courtConfigs: Array.from({ length: 5 }, (_, i) => ({
+            id: i + 1,
+            rimType: (i + 1) <= 2 ? 'low' : 'normal',
+            allowedCategories: []
+          })),
           gameDuration: 10,
           breakDuration: 5,
           startTime: "09:30",
+          endTime: "14:30",
+          minGamesPerTeam: 3,
           generalBreakTime: "11:30",
           generalBreakDuration: 15
         },
@@ -331,9 +403,60 @@ export default function App() {
     }
   };
 
-  const [highlightedTeam, setHighlightedTeam] = useState<string | null>(null);
+  const [filterTeams, setFilterTeams] = useState<string[]>([]);
+  const [showTeamFilter, setShowTeamFilter] = useState(false);
 
   const teamNames = useMemo(() => Array.from(new Set(teams.map(t => t.name))).sort(), [teams]);
+
+  const handleMatchDrop = (matchId: string, targetCourt: number, targetTimeStr: string) => {
+    if (isLocked || hasScores) return;
+
+    setMatches(prevMatches => {
+      const sourceMatch = prevMatches.find(m => m.id === matchId);
+      if (!sourceMatch) return prevMatches;
+
+      const targetMatch = prevMatches.find(m => 
+        m.court === targetCourt && 
+        formatTime(m.startTime) === targetTimeStr
+      );
+
+      const newMatches = prevMatches.map(m => {
+        if (m.id === sourceMatch.id) {
+          if (targetMatch) {
+            return {
+              ...m,
+              startTime: targetMatch.startTime,
+              endTime: targetMatch.endTime,
+              court: targetMatch.court
+            };
+          } else {
+            const [h, min] = targetTimeStr.split(':').map(Number);
+            const newStart = new Date(m.startTime);
+            newStart.setHours(h, min, 0, 0);
+            const duration = m.endTime.getTime() - m.startTime.getTime();
+            const newEnd = new Date(newStart.getTime() + duration);
+            return {
+              ...m,
+              startTime: newStart,
+              endTime: newEnd,
+              court: targetCourt
+            };
+          }
+        }
+        if (targetMatch && m.id === targetMatch.id) {
+          return {
+            ...m,
+            startTime: sourceMatch.startTime,
+            endTime: sourceMatch.endTime,
+            court: sourceMatch.court
+          };
+        }
+        return m;
+      });
+
+      return newMatches;
+    });
+  };
 
   const handleGenerate = () => {
     try {
@@ -356,7 +479,11 @@ export default function App() {
       setMatches(generated);
       setIsLocked(false);
     } catch (e) {
-      setError("Error al generar el calendario.");
+      if (e instanceof Error) {
+        setError(e.message);
+      } else {
+        setError("Error al generar el calendario.");
+      }
     }
   };
 
@@ -396,6 +523,8 @@ export default function App() {
     'CAD F': 'border-amber-500 bg-amber-50 text-amber-600',
     'JUN M': 'border-rose-500 bg-rose-50 text-rose-600',
     'JUN F': 'border-pink-500 bg-pink-50 text-pink-600',
+    'SEN M': 'border-slate-500 bg-slate-50 text-slate-600',
+    'SEN F': 'border-zinc-500 bg-zinc-50 text-zinc-600',
   };
 
   const getCatStyles = (cat: string) => {
@@ -569,11 +698,12 @@ export default function App() {
 
   const filteredMatches = useMemo(() => {
     return resolvedMatches.filter(m => {
-      const matchCat = filterCat === 'all' || m.category === filterCat || m.phase === filterCat;
+      const matchCat = filterCats.length === 0 || filterCats.includes(m.category) || filterCats.includes(m.phase);
       const matchCourt = filterCourt === 'all' || m.court.toString() === filterCourt;
-      return matchCat && matchCourt;
+      const matchTeam = filterTeams.length === 0 || filterTeams.includes(m.team1) || filterTeams.includes(m.team2);
+      return matchCat && matchCourt && matchTeam;
     });
-  }, [resolvedMatches, filterCat, filterCourt]);
+  }, [resolvedMatches, filterCats, filterCourt, filterTeams]);
 
   const groupedMatchesByTime = useMemo(() => {
     const groups = new Map<string, Match[]>();
@@ -592,7 +722,7 @@ export default function App() {
 
   const categories = Array.from(new Set(teams.map(t => t.category)));
   const phases = Array.from(new Set(resolvedMatches.map(m => m.phase)));
-  const courtNumbers = Array.from({ length: config.courts }, (_, i) => (i + 1).toString());
+  const courtNumbers = config.courtConfigs.map(c => c.id.toString());
 
   if (!currentTournament) {
     return (
@@ -632,7 +762,28 @@ export default function App() {
         </div>
 
         <div className="flex gap-1 md:gap-4 items-center">
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="lg:hidden p-2 bg-[#16213e] rounded-lg border border-slate-700 text-slate-400 hover:text-white transition-colors"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          <button 
+            onClick={() => setIsSidebarVisible(!isSidebarVisible)}
+            className="hidden lg:flex p-2 bg-[#16213e] rounded-lg border border-slate-700 text-slate-400 hover:text-white transition-colors items-center gap-2"
+            title={isSidebarVisible ? "Ocultar Ajustes" : "Mostrar Ajustes"}
+          >
+            {isSidebarVisible ? <Settings className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+
           <div className="flex bg-[#16213e] rounded-xl p-0.5 md:p-1 border border-slate-700 shadow-inner overflow-x-auto no-scrollbar">
+            <button 
+              onClick={() => setTournamentView('courts')}
+              className={`flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-2 rounded-lg text-[8px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'courts' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+            >
+              <MapPin className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">PISTAS</span>
+            </button>
             <button 
               onClick={() => setTournamentView('teams')}
               className={`flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-2 rounded-lg text-[8px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'teams' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
@@ -656,7 +807,7 @@ export default function App() {
           <div className="hidden lg:flex items-center gap-4 border-l border-slate-700 pl-4">
             <div className="text-right">
               <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Canchas</p>
-              <p className="font-mono text-lg font-black text-[#e94560] leading-none">{config.courts}</p>
+              <p className="font-mono text-lg font-black text-[#e94560] leading-none">{config.courtConfigs.length}</p>
             </div>
             <div className="text-right">
               <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Fin Previsto</p>
@@ -684,17 +835,26 @@ export default function App() {
 
         {/* Sidebar */}
         <aside className={`
-          fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-slate-200 flex flex-col shadow-2xl shrink-0 transition-transform duration-300 transform
+          fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-slate-200 flex flex-col shadow-2xl shrink-0 transition-all duration-300 transform
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:relative lg:translate-x-0 lg:flex
+          lg:relative lg:translate-x-0 
+          ${isSidebarVisible ? 'lg:flex lg:w-80' : 'lg:hidden lg:w-0'}
         `}>
-          <div className="flex items-center justify-between p-6 border-b border-slate-100 lg:hidden bg-[#1a1a2e] text-white">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between p-6 border-b border-slate-100 lg:border-b-0 lg:pb-0">
+            <div className="flex items-center gap-2 lg:hidden bg-[#1a1a2e] text-white p-6 -m-6 mb-0 w-full">
               <Trophy className="w-5 h-5 text-[#e94560]" />
               <span className="font-black italic text-sm tracking-tighter">CONFIGURACIÓN</span>
+              <button onClick={() => setIsSidebarOpen(false)} className="ml-auto p-2 hover:bg-white/10 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-white/10 rounded-lg">
-              <X className="w-5 h-5" />
+            {/* Desktop hide button */}
+            <button 
+              onClick={() => setIsSidebarVisible(false)}
+              className="hidden lg:flex ml-auto p-2 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors"
+              title="Ocultar menú"
+            >
+              <ChevronRight className="w-5 h-5 rotate-180" />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
@@ -710,25 +870,17 @@ export default function App() {
                 )}
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Pistas Totales</label>
-                  <input 
-                    type="number" 
-                    value={config.courts ?? 5} 
-                    disabled={isLocked || hasScores}
-                    onChange={e => setConfig(c => ({...c, courts: Math.max(1, +e.target.value)}))} 
-                    className={`w-full bg-transparent font-mono font-black text-lg outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
-                  />
-                </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <label className="text-[9px] font-black text-[#e94560] uppercase block mb-1">Pistas Aro Bajo</label>
-                  <input 
-                    type="number" 
-                    value={config.lowRimCourts ?? 0} 
-                    disabled={isLocked || hasScores}
-                    onChange={e => setConfig(c => ({...c, lowRimCourts: Math.max(0, +e.target.value)}))} 
-                    className={`w-full bg-transparent font-mono font-black text-lg outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
-                  />
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 col-span-2">
+                  <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Resumen Pistas</label>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-black text-lg text-slate-900">{config.courtConfigs.length} Pistas</span>
+                    <button 
+                      onClick={() => setTournamentView('courts')}
+                      className="text-[10px] font-black text-[#e94560] uppercase hover:underline"
+                    >
+                      Configurar
+                    </button>
+                  </div>
                 </div>
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Juego (m)</label>
@@ -769,6 +921,40 @@ export default function App() {
                     onChange={e => setConfig(c => ({...c, generalBreakTime: e.target.value}))} 
                     className={`w-full bg-transparent font-mono font-black text-lg outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <label className="text-[9px] font-black text-[#e94560] uppercase block mb-1">Hora Fin</label>
+                  <input 
+                    type="time" 
+                    value={config.endTime ?? "14:30"} 
+                    disabled={isLocked || hasScores}
+                    onChange={e => setConfig(c => ({...c, endTime: e.target.value}))} 
+                    className={`w-full bg-transparent font-mono font-black text-lg outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
+                  />
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <label className="text-[9px] font-black text-[#e94560] uppercase block mb-1">Mín. Partidos</label>
+                  <input 
+                    type="number" 
+                    value={config.minGamesPerTeam ?? 3} 
+                    disabled={isLocked || hasScores}
+                    onChange={e => setConfig(c => ({...c, minGamesPerTeam: Math.max(1, +e.target.value)}))} 
+                    className={`w-full bg-transparent font-mono font-black text-lg outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
+                  />
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 col-span-1 flex flex-col justify-center">
+                  <label className="text-[9px] font-black text-[#e94560] uppercase block mb-2 text-center">Fase de Relleno</label>
+                  <button
+                    onClick={toggleFillPhase}
+                    disabled={isLocked || hasScores}
+                    className={`flex items-center justify-center p-2 rounded-lg border-2 transition-all ${config.useFillPhase ? 'bg-[#e94560] border-[#e94560] text-white shadow-md' : 'bg-white border-slate-200 text-slate-400'}`}
+                  >
+                    {config.useFillPhase ? (
+                      <CheckCircle2 className="w-5 h-5" />
+                    ) : (
+                      <Circle className="w-5 h-5" />
+                    )}
+                  </button>
                 </div>
               </div>
             </section>
@@ -903,56 +1089,160 @@ export default function App() {
             ) : (
               <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Unified Header with Toggle and Filters */}
-                <div className="bg-white border-b border-slate-200 p-1 md:p-4 flex items-center gap-3 overflow-x-auto no-scrollbar shrink-0 px-4 md:px-8 shadow-sm z-20">
-                   {(viewMode === 'grid' || viewMode === 'calendar') && (
-                     <div className="flex bg-slate-100 p-0.5 md:p-1 rounded-xl shrink-0">
-                       <button 
-                         onClick={() => setViewMode('grid')}
-                         className={`px-3 md:px-4 py-1 md:py-1.5 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${viewMode === 'grid' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                       >
-                         POR PISTA
-                       </button>
-                       <button 
-                         onClick={() => setViewMode('calendar')}
-                         className={`px-3 md:px-4 py-1 md:py-1.5 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${viewMode === 'calendar' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                       >
-                         CRONOLÓGICO
-                       </button>
-                     </div>
-                   )}
+                <div className="bg-white border-b border-slate-200 p-2 md:p-4 flex flex-wrap items-center gap-3 shrink-0 px-4 md:px-8 shadow-sm z-[60]">
+                    {(viewMode === 'grid' || viewMode === 'calendar') && (
+                      <div className="flex bg-slate-100 p-0.5 md:p-1 rounded-xl shrink-0">
+                        <button 
+                          onClick={() => setViewMode('grid')}
+                          className={`px-3 md:px-4 py-1 md:py-1.5 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${viewMode === 'grid' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                          POR PISTA
+                        </button>
+                        <button 
+                          onClick={() => setViewMode('calendar')}
+                          className={`px-3 md:px-4 py-1 md:py-1.5 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${viewMode === 'calendar' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                          CRONOLÓGICO
+                        </button>
+                      </div>
+                    )}
 
-                   <div className="flex items-center gap-2 md:gap-3 shrink-0">
-                     <Filter className="w-3.5 h-3.5 text-slate-400" />
-                     <select 
-                       value={filterCat} 
-                       onChange={e => setFilterCat(e.target.value)}
-                       className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 md:px-3 md:py-1.5 text-[10px] md:text-[11px] font-bold focus:ring-2 focus:ring-[#e94560]/20 outline-none min-w-[100px] md:min-w-[140px]"
-                     >
-                       <option value="all">Categoría (Todas)</option>
-                       {categories.map(cat => (
-                         <option key={cat} value={cat}>{cat}</option>
-                       ))}
-                     </select>
-                   </div>
+                    <div className="flex items-center gap-2 md:gap-3 shrink-0 relative z-[70]">
+                      <Filter className="w-3.5 h-3.5 text-slate-400" />
+                      <button
+                        onClick={() => setShowCatFilter(!showCatFilter)}
+                        className={`bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 md:px-3 md:py-1.5 text-[10px] md:text-[11px] font-bold focus:ring-2 focus:ring-[#e94560]/20 outline-none min-w-[100px] md:min-w-[140px] text-left flex justify-between items-center transition-all ${showCatFilter ? 'border-[#e94560] ring-2 ring-[#e94560]/10' : ''}`}
+                      >
+                        <span className="truncate pr-2">
+                          {filterCats.length === 0 ? 'Categoría (Todas)' : `${filterCats.length === 1 ? filterCats[0] : `${filterCats.length} categorías`}`}
+                        </span>
+                        <ChevronRight className={`w-3 h-3 transition-transform shrink-0 ${showCatFilter ? 'rotate-90' : ''}`} />
+                      </button>
+                      
+                      <AnimatePresence>
+                        {showCatFilter && (
+                          <>
+                            <div 
+                              className="fixed inset-0 z-[65]" 
+                              onClick={() => setShowCatFilter(false)} 
+                            />
+                            <motion.div
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              className="absolute top-full left-0 mt-2 w-[240px] bg-white rounded-xl shadow-2xl border border-slate-200 z-[70] py-2 max-h-[400px] overflow-y-auto custom-scrollbar"
+                            >
+                              <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50 mb-1 sticky top-0 z-10">
+                                <span className="text-[9px] font-black uppercase text-slate-400">Seleccionar</span>
+                                <button 
+                                  onClick={() => setFilterCats([])}
+                                  className="text-[9px] font-black uppercase text-[#e94560] hover:underline"
+                                >
+                                  Limpiar
+                                </button>
+                              </div>
+                              <div className="px-1">
+                                {categories.map(cat => {
+                                  const isSelected = filterCats.includes(cat);
+                                  return (
+                                    <button
+                                      key={cat}
+                                      onClick={() => {
+                                        setFilterCats(prev => 
+                                          prev.includes(cat) 
+                                            ? prev.filter(c => c !== cat) 
+                                            : [...prev, cat]
+                                        );
+                                      }}
+                                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left text-[10px] md:text-[11px] font-bold transition-all ${isSelected ? 'bg-[#e94560]/10 text-[#e94560]' : 'text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                      {cat}
+                                      {isSelected ? (
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-[#e94560]" />
+                                      ) : (
+                                        <Circle className="w-3.5 h-3.5 text-slate-200" />
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
+                    </div>
 
-                   <div className="flex items-center gap-2 md:gap-3 shrink-0">
-                     <Search className="w-3.5 h-3.5 text-slate-400" />
-                     <select 
-                       value={highlightedTeam || ''} 
-                       onChange={e => setHighlightedTeam(e.target.value || null)}
-                       className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 md:px-3 md:py-1.5 text-[10px] md:text-[11px] font-bold focus:ring-2 focus:ring-[#e94560]/20 outline-none min-w-[120px] md:min-w-[180px]"
-                     >
-                       <option value="">Equipo (Todos)</option>
-                       {teamNames.map(name => (
-                         <option key={name} value={name}>{name}</option>
-                       ))}
-                     </select>
-                   </div>
+                    <div className="flex items-center gap-2 md:gap-3 shrink-0 relative z-[70]">
+                      <Search className="w-3.5 h-3.5 text-slate-400" />
+                      <button
+                        onClick={() => setShowTeamFilter(!showTeamFilter)}
+                        className={`bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 md:px-3 md:py-1.5 text-[10px] md:text-[11px] font-bold focus:ring-2 focus:ring-[#e94560]/20 outline-none min-w-[120px] md:min-w-[180px] text-left flex justify-between items-center transition-all ${showTeamFilter ? 'border-[#e94560] ring-2 ring-[#e94560]/10' : ''}`}
+                      >
+                        <span className="truncate pr-2">
+                          {filterTeams.length === 0 ? 'Equipo (Todos)' : `${filterTeams.length === 1 ? filterTeams[0] : `${filterTeams.length} equipos`}`}
+                        </span>
+                        <ChevronRight className={`w-3 h-3 transition-transform shrink-0 ${showTeamFilter ? 'rotate-90' : ''}`} />
+                      </button>
 
-                   <div className="ml-auto text-[8px] md:text-[10px] font-black text-slate-400 shrink-0 whitespace-nowrap">Total: {filteredMatches.length}</div>
-                </div>
+                      <AnimatePresence>
+                        {showTeamFilter && (
+                          <>
+                            <div 
+                              className="fixed inset-0 z-[65]" 
+                              onClick={() => setShowTeamFilter(false)} 
+                            />
+                            <motion.div
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              className="absolute top-full right-0 mt-2 w-[240px] bg-white rounded-xl shadow-2xl border border-slate-200 z-[70] py-2 max-h-[400px] overflow-y-auto custom-scrollbar"
+                            >
+                              <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50 mb-1 sticky top-0 z-10">
+                                <span className="text-[9px] font-black uppercase text-slate-400">Seleccionar</span>
+                                <button 
+                                  onClick={() => setFilterTeams([])}
+                                  className="text-[9px] font-black uppercase text-[#e94560] hover:underline"
+                                >
+                                  Limpiar
+                                </button>
+                              </div>
+                              <div className="px-1">
+                                {teamNames.map(name => {
+                                  const isSelected = filterTeams.includes(name);
+                                  return (
+                                    <button
+                                      key={name}
+                                      onClick={() => {
+                                        setFilterTeams(prev => 
+                                          prev.includes(name) 
+                                            ? prev.filter(n => n !== name) 
+                                            : [...prev, name]
+                                        );
+                                      }}
+                                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left text-[10px] md:text-[11px] font-bold transition-all ${isSelected ? 'bg-[#e94560]/10 text-[#e94560]' : 'text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                      {name}
+                                      {isSelected ? (
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-[#e94560]" />
+                                      ) : (
+                                        <Circle className="w-3.5 h-3.5 text-slate-200" />
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <div className="ml-auto text-[8px] md:text-[10px] font-black text-slate-400 shrink-0 whitespace-nowrap">Total: {filteredMatches.length}</div>
+                 </div>
+
 
                 {(viewMode === 'grid' || viewMode === 'calendar') ? (
+
                   <div className="flex-1 flex flex-col overflow-hidden">
                     
                     {viewMode === 'grid' ? (
@@ -961,13 +1251,13 @@ export default function App() {
                           {/* Sticky Header now inside the scrollable area */}
                           <div 
                             className="flex sticky top-0 z-30 bg-[#1a1a2e] text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-800 select-none shadow-md"
-                            style={{ minWidth: `calc(80px + ${config.courts * 160}px)` }}
+                            style={{ minWidth: `calc(80px + ${config.courtConfigs.length * 160}px)` }}
                           >
-                            <div className="w-[80px] md:w-[120px] py-3 md:py-4 px-4 md:px-6 border-r border-slate-800 shrink-0 bg-[#1a1a2e]">Horario</div>
-                            {Array.from({ length: config.courts }).map((_, i) => (
+                            <div className="w-[80px] md:w-[120px] py-3 md:py-4 px-4 md:px-6 border-r border-slate-800 shrink-0 bg-[#1a1a2e] sticky left-0 z-40 shadow-[2px_0_5px_rgba(0,0,0,0.2)]">Horario</div>
+                            {config.courtConfigs.map((c, i) => (
                               <div key={i} className={`w-[160px] md:w-[180px] py-3 md:py-4 px-2 md:px-6 text-center border-r border-slate-800 shrink-0 bg-[#1a1a2e]`}>
-                                Pista {i + 1}
-                                {i < config.lowRimCourts && (
+                                Pista {c.id}
+                                {c.rimType === 'low' && (
                                   <span className="block text-[7px] text-[#e94560] mt-1 font-black tracking-tighter uppercase">Aro Bajo</span>
                                 )}
                               </div>
@@ -980,22 +1270,58 @@ export default function App() {
                                 <div key={time} className="flex flex-col">
                                   <div 
                                     className="flex border-b border-white/20 min-h-[60px] md:min-h-[90px]"
-                                    style={{ minWidth: `calc(80px + ${config.courts * 160}px)` }}
+                                    style={{ minWidth: `calc(80px + ${config.courtConfigs.length * 160}px)` }}
                                   >
-                                    <div className="w-[80px] md:w-[120px] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center border-r border-slate-200 px-2 md:px-4 shrink-0">
+                                    <div className="w-[80px] md:w-[120px] bg-white sticky left-0 z-20 flex flex-col items-center justify-center border-r border-slate-200 px-2 md:px-4 shrink-0 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
                                        <span className="font-mono text-sm md:text-base font-black text-slate-700">{time}</span>
                                     </div>
-                                    {Array.from({ length: config.courts }).map((_, courtIdx) => {
-                                       const match = slotMatches.find(m => m.court === courtIdx + 1);
-                                       const isHighlighted = highlightedTeam ? (match?.team1 === highlightedTeam || match?.team2 === highlightedTeam) : true;
-                                       const isOtherHighlighted = highlightedTeam && !isHighlighted;
+                                    {config.courtConfigs.map((cc, courtIdx) => {
+                                       const match = slotMatches.find(m => m.court === cc.id);
+                                       const isHighlighted = filterTeams.length > 0 ? (filterTeams.includes(match?.team1 || '') || filterTeams.includes(match?.team2 || '')) : false;
+                                       const isOtherHighlighted = filterTeams.length > 0 && !isHighlighted;
                                        return (
-                                         <div key={courtIdx} className={`w-[160px] md:w-[180px] p-1 md:p-1.5 bg-white relative shrink-0 ${courtIdx < config.courts - 1 ? 'border-r border-slate-100' : ''}`}>
+                                         <div 
+                                           key={courtIdx} 
+                                           className={`w-[160px] md:w-[180px] p-1 md:p-1.5 bg-white relative shrink-0 ${courtIdx < config.courtConfigs.length - 1 ? 'border-r border-slate-100' : ''}`}
+                                           onDragOver={(e) => {
+                                             if (isLocked || hasScores) return;
+                                             e.preventDefault();
+                                             (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc';
+                                           }}
+                                           onDragLeave={(e) => {
+                                             (e.currentTarget as HTMLElement).style.backgroundColor = '';
+                                           }}
+                                           onDrop={(e) => {
+                                             if (isLocked || hasScores) return;
+                                             e.preventDefault();
+                                             (e.currentTarget as HTMLElement).style.backgroundColor = '';
+                                             const mId = e.dataTransfer.getData("matchId");
+                                             if (mId) {
+                                               handleMatchDrop(mId, cc.id, time);
+                                             }
+                                           }}
+                                         >
                                             {match ? (
-                                              <div className={`h-full rounded-lg border-l-4 p-2 md:p-3 shadow-sm flex flex-col justify-center ${getCatStyles(match.category)} ${isOtherHighlighted ? 'opacity-10 grayscale scale-95' : 'opacity-100'} ${highlightedTeam && isHighlighted ? 'ring-2 ring-[#e94560] scale-105 z-20 bg-white' : ''}`}>
+                                              <div 
+                                                draggable={!isLocked && !hasScores}
+                                                onDragStart={(e) => {
+                                                  if (isLocked || hasScores) {
+                                                    e.preventDefault();
+                                                    return;
+                                                  }
+                                                  e.dataTransfer.setData("matchId", match.id);
+                                                  e.dataTransfer.effectAllowed = "move";
+                                                }}
+                                                className={`h-full rounded-lg border-l-4 p-2 md:p-3 shadow-sm flex flex-col justify-center cursor-move active:scale-95 transition-transform ${getCatStyles(match.category)} ${isOtherHighlighted ? 'opacity-10 grayscale scale-95' : 'opacity-100'} ${filterTeams.length > 0 && isHighlighted ? 'ring-2 ring-[#e94560] scale-105 z-20 bg-white' : ''} ${(match.phase === 'Fase Relleno' || match.phase === 'Min. Partidos') ? 'border-dashed border-2 opacity-80 bg-slate-50/50' : ''}`}
+                                              >
                                                 <div className="flex justify-between items-start mb-0.5 md:mb-1">
-                                                  <p className="text-[6px] md:text-[7px] font-black uppercase opacity-60">{match.category}</p>
-                                                  {match.court <= config.lowRimCourts && (
+                                                  <div className="flex items-center gap-1">
+                                                    <p className="text-[6px] md:text-[7px] font-black uppercase opacity-60">{match.category}</p>
+                                                    {(match.phase === 'Fase Relleno' || match.phase === 'Min. Partidos') && (
+                                                      <span className="text-[5px] font-black bg-slate-900/10 text-slate-500 px-1 rounded-sm leading-tight uppercase">EXTRA</span>
+                                                    )}
+                                                  </div>
+                                                  {cc.rimType === 'low' && (
                                                     <span className="text-[5px] md:text-[6px] font-black bg-[#e94560] text-white px-1 rounded-sm leading-tight">ARO BAJO</span>
                                                   )}
                                                 </div>
@@ -1011,7 +1337,7 @@ export default function App() {
                                     })}
                                   </div>
                                   {idx < groupedMatchesByTime.length - 1 && (
-                                    <div className="h-4 md:h-6 bg-slate-400/10 flex items-center px-6 relative border-b border-white/5" style={{ minWidth: `calc(80px + ${config.courts * 160}px)` }}>
+                                    <div className="h-4 md:h-6 bg-slate-400/10 flex items-center px-6 relative border-b border-white/5" style={{ minWidth: `calc(80px + ${config.courtConfigs.length * 160}px)` }}>
                                       <div className="w-full h-px bg-white/10" />
                                       <span className="absolute left-[100px] md:left-[140px] px-2 md:px-3 py-0.5 md:py-1 bg-[#1a1a2e] rounded-full text-[6px] md:text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] shadow-sm">
                                         Pausa {config.breakDuration} min
@@ -1041,12 +1367,15 @@ export default function App() {
                                     <div className="col-span-1 md:col-span-2 text-[10px] font-black flex flex-col justify-center">
                                       <div className="flex items-center gap-1.5">
                                         <span className={`text-[9px] font-bold ${isSpecial ? 'text-white' : 'text-slate-900'}`}>{m.category}</span>
+                                        {(m.phase === 'Fase Relleno' || m.phase === 'Min. Partidos') && (
+                                          <span className="text-[7px] bg-slate-100 text-slate-400 px-1 rounded-sm leading-tight font-black uppercase border border-slate-200">Extra</span>
+                                        )}
                                         {isSpecial && (isFinal ? <Trophy className="w-3 h-3 text-[#e94560]" /> : <MapPin className="w-3 h-3 text-[#e94560]" />)}
                                       </div>
                                     </div>
                                     <div className="text-center md:col-span-1">
                                       <span className={`px-2 py-1 text-[9px] md:text-[10px] font-black rounded uppercase tracking-tighter whitespace-nowrap ${isSpecial ? 'bg-[#e94560] text-white' : 'bg-slate-900 text-white'}`}>PISTA {m.court}</span>
-                                      {m.court <= config.lowRimCourts && (
+                                      {config.courtConfigs.find(cc => cc.id === m.court)?.rimType === 'low' && (
                                         <span className={`block text-[7px] font-black tracking-tighter uppercase mt-0.5 ${isSpecial ? 'text-slate-400' : 'text-[#e94560]'}`}>Aro Bajo</span>
                                       )}
                                     </div>
@@ -1078,8 +1407,8 @@ export default function App() {
                   </div>
                 ) : (
                     <div className="flex-1 overflow-y-auto p-8 space-y-12 bg-white scroll-smooth custom-scrollbar">
-                      {/* Classification view respects filterCat */}
-                      {(categories as string[]).filter(cat => filterCat === 'all' || cat === filterCat).map(cat => {
+                      {/* Classification view respects filterCats */}
+                      {(categories as string[]).filter(cat => filterCats.length === 0 || filterCats.includes(cat)).map(cat => {
                       const catData = classification[cat];
                       return (
                         <section key={cat} className="space-y-6">
@@ -1091,18 +1420,18 @@ export default function App() {
                                 <div key={letter} className="space-y-4">
                                   <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] px-4 text-slate-400">Grupo {letter}</h3>
                                   <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                                    <ClassificationTable teams={groupTeams} />
+                                    <ClassificationTable teams={groupTeams} filterTeams={filterTeams} />
                                   </div>
                                 </div>
                               ))}
                             </div>
                           ) : (
                             <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                              <ClassificationTable teams={catData?.all || []} />
+                              <ClassificationTable teams={catData?.all || []} filterTeams={filterTeams} />
                             </div>
                           )}
 
-                          <PlayoffSection category={cat} matches={resolvedMatches} onUpdateScore={updateScore} isLocked={isLocked} />
+                          <PlayoffSection category={cat} matches={resolvedMatches} onUpdateScore={updateScore} isLocked={isLocked} filterTeams={filterTeams} />
                         </section>
                       );
                     })}
@@ -1110,7 +1439,7 @@ export default function App() {
                 )}
               </div>
             )
-          ) : (
+          ) : tournamentView === 'teams' ? (
             <TeamsManagementView 
               appCategories={appCategories}
               setAppCategories={setAppCategories}
@@ -1118,6 +1447,13 @@ export default function App() {
               setTeamsByCategory={setTeamsByCategory}
               initialCategories={INITIAL_CATEGORIES}
               onRenameTeam={renameTeam}
+              isLocked={isLocked}
+            />
+          ) : (
+            <CourtsManagementView 
+              config={config}
+              setConfig={setConfig}
+              categories={appCategories}
               isLocked={isLocked}
             />
           )}
@@ -1139,7 +1475,7 @@ export default function App() {
   );
 }
 
-function ClassificationTable({ teams }: { teams: any[] }) {
+function ClassificationTable({ teams, filterTeams = [] }: { teams: any[], filterTeams?: string[] }) {
   return (
     <table className="w-full text-left">
       <thead className="bg-[#1a1a2e] text-white text-[9px] font-black uppercase tracking-[0.2em]">
@@ -1155,32 +1491,35 @@ function ClassificationTable({ teams }: { teams: any[] }) {
         </tr>
       </thead>
       <tbody className="divide-y divide-slate-100">
-        {teams.map((t, idx) => (
-          <tr key={t.name} className={`hover:bg-slate-50 transition-colors ${idx === 0 ? 'bg-amber-50/50' : ''}`}>
-            <td className="px-6 py-4 flex items-center gap-3">
-              <span className={`w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-black ${idx === 0 ? 'bg-amber-400 text-white shadow-md' : 'bg-slate-100 text-slate-400'}`}>
-                {idx + 1}
-              </span>
-              <span className="font-bold text-slate-900">{t.name}</span>
-              {idx === 0 && <Trophy className="w-3 h-3 text-amber-500 fill-amber-500" />}
-            </td>
-            <td className="px-4 py-4 text-center font-mono font-bold text-slate-500">{t.pj}</td>
-            <td className="px-4 py-4 text-center font-mono font-bold text-green-600">{t.pg}</td>
-            <td className="px-4 py-4 text-center font-mono font-bold text-red-600">{t.pp}</td>
-            <td className="px-4 py-4 text-center font-mono font-black text-slate-900 bg-slate-50">{t.pts}</td>
-            <td className="px-4 py-4 text-center font-mono text-slate-500">{t.pf}</td>
-            <td className="px-4 py-4 text-center font-mono text-slate-500">{t.pc}</td>
-            <td className={`px-4 py-4 text-center font-mono font-bold ${t.pf - t.pc > 0 ? 'text-blue-500' : 'text-slate-400'}`}>
-              {t.pf - t.pc > 0 ? `+${t.pf - t.pc}` : t.pf - t.pc}
-            </td>
-          </tr>
-        ))}
+        {teams.map((t, idx) => {
+          const isHighlighted = filterTeams.includes(t.name);
+          return (
+            <tr key={t.name} className={`hover:bg-slate-50 transition-colors ${idx === 0 ? 'bg-amber-50/50' : ''} ${isHighlighted ? 'bg-[#e94560]/10 ring-1 ring-[#e94560] relative z-10' : ''}`}>
+              <td className="px-6 py-4 flex items-center gap-3">
+                <span className={`w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-black ${idx === 0 ? 'bg-amber-400 text-white shadow-md' : isHighlighted ? 'bg-[#e94560] text-white' : 'bg-slate-100 text-slate-400'}`}>
+                  {idx + 1}
+                </span>
+                <span className={`font-bold ${isHighlighted ? 'text-[#e94560]' : 'text-slate-900'}`}>{t.name}</span>
+                {idx === 0 && <Trophy className="w-3 h-3 text-amber-500 fill-amber-500" />}
+              </td>
+              <td className="px-4 py-4 text-center font-mono font-bold text-slate-500">{t.pj}</td>
+              <td className="px-4 py-4 text-center font-mono font-bold text-green-600">{t.pg}</td>
+              <td className="px-4 py-4 text-center font-mono font-bold text-red-600">{t.pp}</td>
+              <td className="px-4 py-4 text-center font-mono font-black text-slate-900 bg-slate-50">{t.pts}</td>
+              <td className="px-4 py-4 text-center font-mono text-slate-500">{t.pf}</td>
+              <td className="px-4 py-4 text-center font-mono text-slate-500">{t.pc}</td>
+              <td className={`px-4 py-4 text-center font-mono font-bold ${t.pf - t.pc > 0 ? 'text-blue-500' : 'text-slate-400'}`}>
+                {t.pf - t.pc > 0 ? `+${t.pf - t.pc}` : t.pf - t.pc}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
 }
 
-function PlayoffSection({ category, matches, onUpdateScore, isLocked }: { category: string, matches: Match[], onUpdateScore: (id: string, s1: number | undefined, s2: number | undefined) => void, isLocked: boolean }) {
+function PlayoffSection({ category, matches, onUpdateScore, isLocked, filterTeams = [] }: { category: string, matches: Match[], onUpdateScore: (id: string, s1: number | undefined, s2: number | undefined) => void, isLocked: boolean, filterTeams?: string[] }) {
   const playoffMatches = matches.filter(m => m.category === category && (m.phase.includes('Semifinal') || m.phase === 'Final'));
   
   if (playoffMatches.length === 0) return null;
@@ -1205,8 +1544,8 @@ function PlayoffSection({ category, matches, onUpdateScore, isLocked }: { catego
         {/* Semifinals Column */}
         {(s1 || s2) && (
           <div className="flex flex-col gap-12 w-64">
-            {s1 && <MatchNode match={s1} label="Semifinal 1" onUpdateScore={onUpdateScore} isLocked={isLocked} />}
-            {s2 && <MatchNode match={s2} label="Semifinal 2" onUpdateScore={onUpdateScore} isLocked={isLocked} />}
+            {s1 && <MatchNode match={s1} label="Semifinal 1" onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />}
+            {s2 && <MatchNode match={s2} label="Semifinal 2" onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />}
           </div>
         )}
 
@@ -1221,7 +1560,7 @@ function PlayoffSection({ category, matches, onUpdateScore, isLocked }: { catego
         {/* Final Column */}
         {final && (
           <div className="flex flex-col justify-center w-80">
-            <MatchNode match={final} label="GRAN FINAL" isMain onUpdateScore={onUpdateScore} isLocked={isLocked} />
+            <MatchNode match={final} label="GRAN FINAL" isMain onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />
           </div>
         )}
       </div>
@@ -1229,7 +1568,7 @@ function PlayoffSection({ category, matches, onUpdateScore, isLocked }: { catego
   );
 }
 
-function MatchNode({ match, label, isMain = false, onUpdateScore, isLocked }: { match: Match, label: string, isMain?: boolean, onUpdateScore: (id: string, s1: number | undefined, s2: number | undefined) => void, isLocked: boolean }) {
+function MatchNode({ match, label, isMain = false, onUpdateScore, isLocked, filterTeams = [] }: { match: Match, label: string, isMain?: boolean, onUpdateScore: (id: string, s1: number | undefined, s2: number | undefined) => void, isLocked: boolean, filterTeams?: string[] }) {
   const formatTimeStr = (date: Date | string) => {
     const d = typeof date === 'string' ? new Date(date) : date;
     return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -1260,6 +1599,7 @@ function MatchNode({ match, label, isMain = false, onUpdateScore, isLocked }: { 
           isMain={isMain}
           onChange={(val) => onUpdateScore(match.id, val, match.score2)}
           isLocked={isLocked}
+          isHighlighted={filterTeams.includes(match.team1)}
         />
         <div className="h-px bg-slate-800" />
         <TeamSlot 
@@ -1269,18 +1609,20 @@ function MatchNode({ match, label, isMain = false, onUpdateScore, isLocked }: { 
           isMain={isMain}
           onChange={(val) => onUpdateScore(match.id, match.score1, val)}
           isLocked={isLocked}
+          isHighlighted={filterTeams.includes(match.team2)}
         />
       </div>
     </div>
   );
 }
 
-function TeamSlot({ name, score, isWinner, isMain, onChange, isLocked }: { name: string, score: number | undefined, isWinner: boolean, isMain: boolean, onChange: (val: number | undefined) => void, isLocked: boolean }) {
+function TeamSlot({ name, score, isWinner, isMain, onChange, isLocked, isHighlighted = false }: { name: string, score: number | undefined, isWinner: boolean, isMain: boolean, onChange: (val: number | undefined) => void, isLocked: boolean, isHighlighted?: boolean }) {
   return (
-    <div className={`flex items-center justify-between p-2 min-h-[44px] transition-colors ${isWinner ? 'bg-white/10' : ''}`}>
-      <span className={`text-[10px] font-black uppercase truncate flex-1 px-2 ${isWinner ? 'text-white' : 'text-slate-400 opacity-60'}`}>
-        {name}
-      </span>
+    <div className={`p-3 flex items-center justify-between transition-all ${isWinner ? 'bg-[#e94560]/10 ring-1 ring-inset ring-[#e94560]/30' : ''} ${isHighlighted ? 'bg-[#e94560]/20' : ''}`}>
+      <div className="flex items-center gap-3">
+        {isWinner && <Trophy className="w-3.5 h-3.5 text-[#e94560]" />}
+        <span className={`text-[11px] font-black tracking-tight ${isWinner ? 'text-[#e94560]' : 'text-white'} ${isHighlighted ? 'text-[#e94560] underline decoration-2' : ''}`}>{name}</span>
+      </div>
       <input 
         type="number" 
         value={score ?? ''}
@@ -1738,6 +2080,232 @@ function TeamsManagementView({
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function CourtsManagementView({ 
+  config, 
+  setConfig, 
+  categories,
+  isLocked 
+}: { 
+  config: ScheduleConfig, 
+  setConfig: (config: ScheduleConfig) => void,
+  categories: string[],
+  isLocked: boolean
+}) {
+  const addCourt = () => {
+    const nextId = config.courtConfigs.length > 0 
+      ? Math.max(...config.courtConfigs.map(c => c.id)) + 1 
+      : 1;
+    
+    // Default to Normal rim and all categories
+    const newCourt: CourtConfig = {
+      id: nextId,
+      rimType: 'normal',
+      allowedCategories: [...categories]
+    };
+
+    setConfig({
+      ...config,
+      courtConfigs: [...config.courtConfigs, newCourt]
+    });
+  };
+
+  const removeCourt = (id: number) => {
+    setConfig({
+      ...config,
+      courtConfigs: config.courtConfigs.filter(c => c.id !== id)
+    });
+  };
+
+  const updateCourt = (id: number, updates: Partial<CourtConfig>) => {
+    setConfig({
+      ...config,
+      courtConfigs: config.courtConfigs.map(c => 
+        c.id === id ? { ...c, ...updates } : c
+      )
+    });
+  };
+
+  const toggleCategory = (courtId: number, category: string) => {
+    const court = config.courtConfigs.find(c => c.id === courtId);
+    if (!court) return;
+
+    const newAllowed = court.allowedCategories.includes(category)
+      ? court.allowedCategories.filter(cat => cat !== category)
+      : [...court.allowedCategories, category];
+    
+    updateCourt(courtId, { allowedCategories: newAllowed });
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto p-8 bg-slate-50 custom-scrollbar">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+          <div>
+            <h2 className="text-3xl font-black italic uppercase tracking-tighter text-[#1a1a2e] mb-2">Configuración de Pistas</h2>
+            <p className="text-slate-500 text-sm font-medium">Define el tipo de aro y las categorías permitidas por pista.</p>
+          </div>
+          <div className="flex items-center gap-4">
+            {!isLocked && (
+              <button 
+                onClick={addCourt}
+                className="flex items-center gap-2 bg-[#e94560] text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#ff516f] transition-all shadow-xl active:scale-95"
+              >
+                <Plus className="w-4 h-4" /> AÑADIR PISTA
+              </button>
+            )}
+            <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              <div className="text-right">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Pistas</p>
+                <p className="text-2xl font-black text-[#1a1a2e]">{config.courtConfigs.length}</p>
+              </div>
+              <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center">
+                <MapPin className="w-6 h-6 text-indigo-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {config.courtConfigs.length === 0 ? (
+          <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 p-20 flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+              <MapPin className="w-8 h-8 text-slate-300" />
+            </div>
+            <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest mb-2">No hay pistas configuradas</h3>
+            <p className="text-slate-400 max-w-sm mb-8">Añade pistas para poder generar el calendario del torneo.</p>
+            <button 
+              onClick={addCourt}
+              className="bg-[#1a1a2e] text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg"
+            >
+              AÑADIR MI PRIMERA PISTA
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {config.courtConfigs.map((court, idx) => (
+              <motion.div 
+                key={court.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col group hover:shadow-xl transition-all"
+              >
+                {/* Court Header */}
+                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 group-hover:bg-white transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-[#1a1a2e] text-white rounded-xl flex items-center justify-center font-black italic text-xl shadow-lg">
+                      {court.id}
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-black italic uppercase tracking-tighter text-[#1a1a2e]">Pista {court.id}</h4>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        {court.allowedCategories.length} categorías permitidas
+                      </p>
+                    </div>
+                  </div>
+                  {!isLocked && (
+                    <button 
+                      onClick={() => removeCourt(court.id)}
+                      className="text-slate-300 hover:text-red-500 transition-colors p-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Court Content */}
+                <div className="p-6 space-y-6">
+                  {/* Rim Type Toggle */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                       TIPO DE ARO
+                    </label>
+                    <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                      <button 
+                        disabled={isLocked}
+                        onClick={() => updateCourt(court.id, { rimType: 'normal' })}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase transition-all ${court.rimType === 'normal' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                         Normal
+                      </button>
+                      <button 
+                        disabled={isLocked}
+                        onClick={() => updateCourt(court.id, { rimType: 'low' })}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase transition-all ${court.rimType === 'low' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                         Aro Bajo
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Categories Selector */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Categorías Permitidas
+                      </label>
+                      {!isLocked && (
+                        <button 
+                          onClick={() => {
+                            const allAllowed = court.allowedCategories.length === categories.length;
+                            updateCourt(court.id, { allowedCategories: allAllowed ? [] : [...categories] });
+                          }}
+                          className="text-[9px] font-black text-[#e94560] uppercase tracking-tighter hover:underline"
+                        >
+                          {court.allowedCategories.length === categories.length ? 'QUITAR TODAS' : 'SELECCIONAR TODAS'}
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="grid grid-cols-1 gap-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                      {([...categories].sort((a, b) => {
+                        const aSelected = court.allowedCategories.includes(a);
+                        const bSelected = court.allowedCategories.includes(b);
+                        if (aSelected && !bSelected) return -1;
+                        if (!aSelected && bSelected) return 1;
+                        return a.localeCompare(b);
+                      })).map(cat => {
+                        const isSelected = court.allowedCategories.includes(cat);
+                        return (
+                          <motion.button
+                            key={cat}
+                            layout
+                            initial={false}
+                            disabled={isLocked}
+                            onClick={() => toggleCategory(court.id, cat)}
+                            className={`flex items-center justify-between p-3 rounded-xl border transition-all text-left ${isSelected ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-300'}`}
+                          >
+                            <span className="text-[11px] font-bold uppercase truncate">{cat}</span>
+                            {isSelected ? (
+                              <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                            ) : (
+                              <Circle className="w-4 h-4 text-slate-200 shrink-0" />
+                            )}
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Insight */}
+                <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                  <p className="text-[9px] font-bold text-slate-400 leading-tight">
+                    {court.rimType === 'low' 
+                      ? 'Recomendada para categorías Baby o Benjamín.' 
+                      : 'Equipada con aros a altura reglamentaria (3.05m).'}
+                  </p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
