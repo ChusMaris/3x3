@@ -152,8 +152,22 @@ export default function App() {
   });
   const [matches, setMatches] = useState<Match[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
 
-  const teams = useMemo(() => parseTeams(teamInput), [teamInput]);
+  const teams = useMemo(() => {
+    const list: Team[] = [];
+    let idCounter = 0;
+    (Object.entries(teamsByCategory) as [string, string[]][]).forEach(([cat, names]) => {
+      names.forEach(name => {
+        list.push({
+          id: `team-${idCounter++}`,
+          category: cat,
+          name: name
+        });
+      });
+    });
+    return list;
+  }, [teamsByCategory]);
   const hasScores = useMemo(() => matches.some(m => m.score1 !== undefined || m.score2 !== undefined), [matches]);
 
   // Auto-generate tournament when config or teams change (ONLY if Open and NO matches exist)
@@ -176,11 +190,13 @@ export default function App() {
     const newConfig = { ...config, useFillPhase: nextVal };
     setConfig(newConfig);
     
-    // Si desactivamos, quitamos los partidos de relleno generados automáticamente
-    // Si activamos, mantenemos lo que hay y dejamos que el scheduler rellene los huecos
+    // Si desactivamos, quitamos SOLAMENTE los partidos de relleno extra
     let baseMatches = matches;
     if (!nextVal) {
-      baseMatches = matches.filter(m => m.phase !== 'Fase Relleno' && m.phase !== 'Min. Partidos');
+      baseMatches = matches.filter(m => 
+        m.phase !== 'Fase Relleno' && 
+        !m.id.startsWith('FILL-')
+      );
     }
     
     try {
@@ -275,6 +291,7 @@ export default function App() {
       minGamesPerTeam: 3,
       generalBreakTime: "11:30",
       generalBreakDuration: 15,
+      useFillPhase: false,
       ...t.data.config
     };
 
@@ -384,7 +401,6 @@ export default function App() {
   };
 
   const deleteTournament = async (id: string) => {
-    if (!window.confirm("¿Estás seguro de que quieres borrar este torneo? No se puede deshacer.")) return;
     try {
       setIsLoading(true);
       const { error } = await supabase
@@ -465,15 +481,6 @@ export default function App() {
         return;
       }
 
-      if (matches.length > 0) {
-        const hasScores = matches.some(m => m.score1 !== undefined || m.score2 !== undefined);
-        const message = hasScores 
-          ? "ATENCIÓN: El torneo ya ha empezado y hay resultados anotados.\n\nSi generas de nuevo, se borrarán TODOS los resultados y el calendario actual.\n\n¿Estás seguro de que quieres continuar?"
-          : "¿Estás seguro de que quieres generar el calendario de nuevo? Se sobreescribirá el actual.";
-        
-        if (!window.confirm(message)) return;
-      }
-
       setError(null);
       const generated = generateSchedule(teams, config);
       setMatches(generated);
@@ -485,6 +492,36 @@ export default function App() {
         setError("Error al generar el calendario.");
       }
     }
+  };
+
+  const [addingMatchSlot, setAddingMatchSlot] = useState<{courtId: number, time: string} | null>(null);
+
+  const deleteMatch = (matchId: string) => {
+    if (isLocked) return;
+    setMatches(prev => prev.filter(m => m.id !== matchId));
+  };
+
+  const addManualMatch = (courtId: number, timeStr: string, category: string, t1: string, t2: string) => {
+    if (isLocked) return;
+    const [h, min] = timeStr.split(':').map(Number);
+    const baseDate = matches.length > 0 ? new Date(matches[0].startTime) : new Date();
+    const startTime = new Date(baseDate);
+    startTime.setHours(h, min, 0, 0);
+    const endTime = new Date(startTime.getTime() + config.gameDuration * 60000);
+    
+    const newMatch: Match = {
+      id: `manual-${Math.random().toString(36).substr(2, 9)}`,
+      category,
+      phase: 'Manual',
+      team1: t1,
+      team2: t2,
+      startTime,
+      endTime,
+      court: courtId
+    };
+    
+    setMatches(prev => [...prev, newMatch]);
+    setAddingMatchSlot(null);
   };
 
   const updateScore = (matchId: string, t1: number | undefined, t2: number | undefined) => {
@@ -544,6 +581,11 @@ export default function App() {
 
     matches.forEach(m => {
       if (m.score1 === undefined || m.score2 === undefined) return;
+      
+      // EXCLUDE matches that are purely for filling holes (Fase Relleno)
+      // BUT INCLUDE 'Min. Partidos' as per user request
+      if (m.phase === 'Fase Relleno' || m.id.startsWith('FILL-')) return;
+      
       const cat = m.category;
       const t1 = m.team1;
       const t2 = m.team2;
@@ -672,8 +714,8 @@ export default function App() {
         }
 
         // Resolución de Ganadores de Semifinales
-        if (name.includes('Ganador S')) {
-          const semiId = name.includes('S1') ? 'Semifinal 1' : 'Semifinal 2';
+        if (name.includes('Ganador Semifinal') || name.includes('Ganador S')) {
+          const semiId = (name.includes('Semifinal 1') || name.includes('S1')) ? 'Semifinal 1' : 'Semifinal 2';
           const semiMatch = matches.find(sm => sm.category === m.category && sm.phase === semiId);
           // Solo se resuelve si el partido de la semifinal ha terminado y hay un ganador
           if (semiMatch && 
@@ -942,17 +984,20 @@ export default function App() {
                     className={`w-full bg-transparent font-mono font-black text-lg outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 col-span-1 flex flex-col justify-center">
-                  <label className="text-[9px] font-black text-[#e94560] uppercase block mb-2 text-center">Fase de Relleno</label>
+                <div className="bg-slate-100 p-3 rounded-xl border border-slate-200 col-span-2 flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <label className="text-[10px] font-black text-[#e94560] uppercase block">Fase de Relleno</label>
+                    <p className="text-[8px] font-bold text-slate-400 mt-0.5">Completa el calendario sin huecos</p>
+                  </div>
                   <button
                     onClick={toggleFillPhase}
                     disabled={isLocked || hasScores}
-                    className={`flex items-center justify-center p-2 rounded-lg border-2 transition-all ${config.useFillPhase ? 'bg-[#e94560] border-[#e94560] text-white shadow-md' : 'bg-white border-slate-200 text-slate-400'}`}
+                    className={`flex items-center justify-center p-3 rounded-xl border-2 transition-all ${config.useFillPhase ? 'bg-[#e94560] border-[#e94560] text-white shadow-lg' : 'bg-white border-slate-300 text-slate-400'}`}
                   >
                     {config.useFillPhase ? (
-                      <CheckCircle2 className="w-5 h-5" />
+                      <LayoutGrid className="w-5 h-5" />
                     ) : (
-                      <Circle className="w-5 h-5" />
+                      <LayoutGrid className="w-5 h-5 opacity-40 shadow-none" />
                     )}
                   </button>
                 </div>
@@ -1279,10 +1324,19 @@ export default function App() {
                                        const match = slotMatches.find(m => m.court === cc.id);
                                        const isHighlighted = filterTeams.length > 0 ? (filterTeams.includes(match?.team1 || '') || filterTeams.includes(match?.team2 || '')) : false;
                                        const isOtherHighlighted = filterTeams.length > 0 && !isHighlighted;
+                                       const isSemi = match?.phase.includes('Semifinal');
+                                       const isFinal = match?.phase === 'Final' || match?.phase === 'Final 3x3';
+                                       const isPlayoff = isSemi || isFinal;
                                        return (
                                          <div 
                                            key={courtIdx} 
-                                           className={`w-[160px] md:w-[180px] p-1 md:p-1.5 bg-white relative shrink-0 ${courtIdx < config.courtConfigs.length - 1 ? 'border-r border-slate-100' : ''}`}
+                                           className={`w-[160px] md:w-[180px] p-1 md:p-1.5 bg-white relative shrink-0 ${courtIdx < config.courtConfigs.length - 1 ? 'border-r border-slate-100' : ''} ${selectedMatchId && !match ? 'ring-2 ring-indigo-400 ring-inset cursor-pointer' : ''}`}
+                                           onClick={() => {
+                                             if (selectedMatchId && !match && !isLocked && !hasScores) {
+                                               handleMatchDrop(selectedMatchId, cc.id, time);
+                                               setSelectedMatchId(null);
+                                             }
+                                           }}
                                            onDragOver={(e) => {
                                              if (isLocked || hasScores) return;
                                              e.preventDefault();
@@ -1304,7 +1358,19 @@ export default function App() {
                                             {match ? (
                                               <div 
                                                 draggable={!isLocked && !hasScores}
-                                                onDragStart={(e) => {
+                                                onClick={(e) => {
+                                                   if (isLocked || hasScores) return;
+                                                   e.stopPropagation();
+                                                   if (selectedMatchId === match.id) {
+                                                     setSelectedMatchId(null);
+                                                   } else if (selectedMatchId) {
+                                                     handleMatchDrop(selectedMatchId, cc.id, time);
+                                                     setSelectedMatchId(null);
+                                                   } else {
+                                                     setSelectedMatchId(match.id);
+                                                   }
+                                                 }}
+                                                 onDragStart={(e) => {
                                                   if (isLocked || hasScores) {
                                                     e.preventDefault();
                                                     return;
@@ -1312,26 +1378,67 @@ export default function App() {
                                                   e.dataTransfer.setData("matchId", match.id);
                                                   e.dataTransfer.effectAllowed = "move";
                                                 }}
-                                                className={`h-full rounded-lg border-l-4 p-2 md:p-3 shadow-sm flex flex-col justify-center cursor-move active:scale-95 transition-transform ${getCatStyles(match.category)} ${isOtherHighlighted ? 'opacity-10 grayscale scale-95' : 'opacity-100'} ${filterTeams.length > 0 && isHighlighted ? 'ring-2 ring-[#e94560] scale-105 z-20 bg-white' : ''} ${(match.phase === 'Fase Relleno' || match.phase === 'Min. Partidos') ? 'border-dashed border-2 opacity-80 bg-slate-50/50' : ''}`}
+                                                className={`h-full rounded-lg border-l-4 p-2 md:p-3 shadow-sm flex flex-col justify-center cursor-move active:scale-95 transition-all ${getCatStyles(match.category)} ${isOtherHighlighted ? 'opacity-10 grayscale scale-95' : 'opacity-100'} ${filterTeams.length > 0 && isHighlighted ? 'ring-2 ring-[#e94560] scale-105 z-20 bg-white' : ''} ${match.phase === 'Min. Partidos' ? 'border-dashed border-2 opacity-90' : match.phase === 'Relleno Extra' ? 'border-dotted border-2 opacity-50 grayscale hover:grayscale-0 transition-all' : ''} ${selectedMatchId === match.id ? 'ring-4 ring-indigo-500 scale-105 z-30 shadow-indigo-200' : ''} ${isFinal ? 'ring-4 ring-amber-400 border-l-amber-500 bg-amber-50/50 shadow-lg scale-105 z-10' : isSemi ? 'ring-2 ring-indigo-300 border-l-indigo-500 bg-indigo-50/30 shadow-md' : ''}`}
                                               >
-                                                <div className="flex justify-between items-start mb-0.5 md:mb-1">
+                                                 <div className="flex justify-between items-start mb-0.5 md:mb-1">
+                                                   <div className="flex items-center gap-1">
+                                                     <p className="text-[6px] md:text-[7px] font-black uppercase opacity-60">{match.category}</p>
+                                                     {match.phase === 'Min. Partidos' && (
+                                                       <span className="text-[5px] font-black bg-emerald-100 text-emerald-600 px-1 rounded-sm leading-tight uppercase" title="Cuentan para la clasificación">Min. Partidos</span>
+                                                     )}
+                                                     {match.phase === 'Fase Relleno' && (
+                                                       <span className="text-[5px] font-black bg-slate-100 text-slate-400 px-1 rounded-sm leading-tight uppercase" title="No cuentan para la clasificación">Extras</span>
+                                                     )}
+                                                     {isFinal && (
+                                                       <span className="text-[5px] font-black bg-amber-400 text-white px-1 rounded-sm leading-tight uppercase flex items-center gap-0.5 animate-pulse">
+                                                         <Trophy className="w-2 h-2" /> FINAL
+                                                       </span>
+                                                     )}
+                                                     {isSemi && (
+                                                       <span className="text-[5px] font-black bg-indigo-500 text-white px-1 rounded-sm leading-tight uppercase shadow-sm">SEMI</span>
+                                                     )}
+                                                   </div>
+                                                   <div className="flex items-center gap-1">
+                                                     {cc.rimType === 'low' && (
+                                                       <span className="text-[5px] md:text-[6px] font-black bg-[#e94560] text-white px-1 rounded-sm leading-tight">ARO BAJO</span>
+                                                     )}
+                                                     {!isLocked && (
+                                                       <button 
+                                                         onClick={(e) => { e.stopPropagation(); deleteMatch(match.id); }}
+                                                         className="p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all shadow-sm border border-transparent hover:border-red-100 bg-white/50"
+                                                         title="Borrar partido"
+                                                       >
+                                                         <Trash2 className="w-3.5 h-3.5" />
+                                                       </button>
+                                                     )}
+                                                   </div>
+                                                 </div>
+                                                <div className={`text-[9px] md:text-[10px] font-bold leading-tight flex flex-col gap-0.5 ${isPlayoff ? 'text-slate-900 tracking-tight' : ''}`}>
+                                                  <span className="truncate">{match.team1}</span>
                                                   <div className="flex items-center gap-1">
-                                                    <p className="text-[6px] md:text-[7px] font-black uppercase opacity-60">{match.category}</p>
-                                                    {(match.phase === 'Fase Relleno' || match.phase === 'Min. Partidos') && (
-                                                      <span className="text-[5px] font-black bg-slate-900/10 text-slate-500 px-1 rounded-sm leading-tight uppercase">EXTRA</span>
+                                                    <span className="text-slate-300 font-black italic text-[7px]">VS</span>
+                                                    {(match.phase === 'Ida' || match.phase.includes('(Ida)')) && (
+                                                      <span className="text-[6px] font-black bg-indigo-50 text-indigo-500 px-1 rounded uppercase">Ida</span>
+                                                    )}
+                                                    {(match.phase === 'Vuelta' || match.phase.includes('(Vuelta)')) && (
+                                                      <span className="text-[6px] font-black bg-orange-50 text-orange-500 px-1 rounded uppercase">Vuelta</span>
                                                     )}
                                                   </div>
-                                                  {cc.rimType === 'low' && (
-                                                    <span className="text-[5px] md:text-[6px] font-black bg-[#e94560] text-white px-1 rounded-sm leading-tight">ARO BAJO</span>
-                                                  )}
-                                                </div>
-                                                <div className="text-[9px] md:text-[10px] font-bold leading-tight flex flex-col gap-0.5">
-                                                  <span className="truncate">{match.team1}</span>
-                                                  <span className="text-slate-300 font-black italic text-[7px]">VS</span>
                                                   <span className="truncate">{match.team2}</span>
                                                 </div>
                                               </div>
-                                            ) : null}
+                                            ) : (
+                                              !isLocked && (
+                                                <button 
+                                                  onClick={() => setAddingMatchSlot({ courtId: cc.id, time: time })}
+                                                  className="absolute inset-x-0 bottom-0 top-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-slate-50/50 group z-10"
+                                                >
+                                                  <div className="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-200 flex items-center justify-center text-slate-300 group-hover:text-[#e94560] group-hover:border-[#e94560] transition-colors">
+                                                    <Plus className="w-4 h-4" />
+                                                  </div>
+                                                </button>
+                                              )
+                                            )}
                                          </div>
                                        )
                                     })}
@@ -1367,8 +1474,16 @@ export default function App() {
                                     <div className="col-span-1 md:col-span-2 text-[10px] font-black flex flex-col justify-center">
                                       <div className="flex items-center gap-1.5">
                                         <span className={`text-[9px] font-bold ${isSpecial ? 'text-white' : 'text-slate-900'}`}>{m.category}</span>
+                                        {m.phase.includes('Ida') && (
+                                          <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${isSpecial ? 'bg-white/10 text-white border-white/20' : 'bg-sky-50 text-sky-500 border-sky-100'}`}>Ida</span>
+                                        )}
+                                        {m.phase.includes('Vuelta') && (
+                                          <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${isSpecial ? 'bg-white/10 text-white border-white/20' : 'bg-indigo-50 text-indigo-500 border-indigo-100'}`}>Vuelta</span>
+                                        )}
                                         {(m.phase === 'Fase Relleno' || m.phase === 'Min. Partidos') && (
-                                          <span className="text-[7px] bg-slate-100 text-slate-400 px-1 rounded-sm leading-tight font-black uppercase border border-slate-200">Extra</span>
+                                          <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${m.phase === 'Min. Partidos' ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
+                                            {m.phase === 'Min. Partidos' ? 'Mínimos' : 'Fase Relleno'}
+                                          </span>
                                         )}
                                         {isSpecial && (isFinal ? <Trophy className="w-3 h-3 text-[#e94560]" /> : <MapPin className="w-3 h-3 text-[#e94560]" />)}
                                       </div>
@@ -1385,17 +1500,28 @@ export default function App() {
                                         type="number" 
                                         value={m.score1 ?? ''} 
                                         onChange={e => updateScore(m.id, e.target.value === '' ? undefined : parseInt(e.target.value), m.score2)}
-                                        className={`w-8 h-8 rounded border text-center text-xs font-black outline-none focus:border-[#e94560] ${isSpecial ? 'bg-white/10 border-white/20 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+                                        className={`w-12 h-12 md:w-14 md:h-14 rounded-xl border text-center text-sm md:text-lg font-black outline-none focus:border-[#e94560] shadow-sm transition-all ${isSpecial ? 'bg-white/10 border-white/20 text-white focus:bg-white/20' : 'bg-white border-slate-200 text-slate-900 focus:bg-slate-50'}`}
                                       />
-                                      <span className={isSpecial ? 'text-[#e94560]' : 'text-slate-300'}>-</span>
+                                      <span className={`text-lg font-black ${isSpecial ? 'text-[#e94560]' : 'text-slate-300'}`}>-</span>
                                       <input 
                                         type="number" 
                                         value={m.score2 ?? ''} 
                                         onChange={e => updateScore(m.id, m.score1, e.target.value === '' ? undefined : parseInt(e.target.value))}
-                                        className={`w-8 h-8 rounded border text-center text-xs font-black outline-none focus:border-[#e94560] ${isSpecial ? 'bg-white/10 border-white/20 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+                                        className={`w-12 h-12 md:w-14 md:h-14 rounded-xl border text-center text-sm md:text-lg font-black outline-none focus:border-[#e94560] shadow-sm transition-all ${isSpecial ? 'bg-white/10 border-white/20 text-white focus:bg-white/20' : 'bg-white border-slate-200 text-slate-900 focus:bg-slate-50'}`}
                                       />
                                     </div>
-                                    <div className={`font-bold text-xs md:col-span-4 ${isSpecial ? 'text-white italic' : ''}`}>{m.team2}</div>
+                                    <div className={`font-bold text-xs md:col-span-3 ${isSpecial ? 'text-white italic' : ''}`}>{m.team2}</div>
+                                    <div className="md:col-span-1 flex justify-end">
+                                      {!isLocked && (
+                                        <button 
+                                          onClick={() => deleteMatch(m.id)}
+                                          className={`p-2 rounded-xl transition-all ${isSpecial ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'}`}
+                                          title="Borrar partido"
+                                        >
+                                          <Trash2 className="w-5 h-5" />
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                 );
                               })}
@@ -1471,6 +1597,47 @@ export default function App() {
         </div>
         <div></div>
       </footer>
+
+      {/* Manual Match Modal */}
+      <AnimatePresence>
+        {addingMatchSlot && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setAddingMatchSlot(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-white/20 relative z-10"
+            >
+              <div className="px-8 py-6 bg-[#1a1a2e] text-white flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-black uppercase italic tracking-wider">Añadir Partido</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                    Pista {addingMatchSlot.courtId} • {addingMatchSlot.time}
+                  </p>
+                </div>
+                <button onClick={() => setAddingMatchSlot(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <AddManualMatchForm 
+                courtId={addingMatchSlot.courtId} 
+                time={addingMatchSlot.time}
+                allowedCategories={config.courtConfigs.find(c => c.id === addingMatchSlot.courtId)?.allowedCategories || []}
+                teamsByCategory={teamsByCategory}
+                onAdd={addManualMatch}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1862,6 +2029,11 @@ function TeamsManagementView({
   };
 
   const removeCategory = (cat: string) => {
+    const teamsInCat = teamsByCategory[cat] || [];
+    if (teamsInCat.length > 0) {
+      alert(`No se puede borrar la categoría "${cat}" porque tiene equipos asignados. Elimina los equipos primero.`);
+      return;
+    }
     setAppCategories(appCategories.filter(c => c !== cat));
     const newTeams = { ...teamsByCategory };
     delete newTeams[cat];
@@ -1919,12 +2091,6 @@ function TeamsManagementView({
               <Filter className="w-4 h-4" /> Configurar Categorías
             </h3>
             <div className="flex gap-2">
-               <button 
-                 onClick={() => setAppCategories(initialCategories)}
-                 className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
-               >
-                 Restablecer Predeterminadas
-               </button>
             </div>
           </div>
           
@@ -2307,6 +2473,76 @@ function CourtsManagementView({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function AddManualMatchForm({ 
+  courtId, 
+  time, 
+  allowedCategories, 
+  teamsByCategory, 
+  onAdd 
+}: { 
+  courtId: number; 
+  time: string; 
+  allowedCategories: string[]; 
+  teamsByCategory: Record<string, string[]>;
+  onAdd: (courtId: number, time: string, category: string, t1: string, t2: string) => void;
+}) {
+  const [selectedCat, setSelectedCat] = useState(allowedCategories[0] || '');
+  const [t1, setT1] = useState('');
+  const [t2, setT2] = useState('');
+
+  const teamsInCat = teamsByCategory[selectedCat] || [];
+
+  return (
+    <div className="p-8 space-y-6">
+      <div className="space-y-2">
+        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoría</label>
+        <select 
+          value={selectedCat}
+          onChange={(e) => { setSelectedCat(e.target.value); setT1(''); setT2(''); }}
+          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:border-[#e94560] outline-none transition-all appearance-none"
+        >
+          {allowedCategories.length === 0 && <option value="">No hay categorías permitidas</option>}
+          {allowedCategories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Equipo 1</label>
+          <select 
+            value={t1}
+            onChange={(e) => setT1(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:border-[#e94560] outline-none transition-all appearance-none"
+          >
+            <option value="">Seleccionar equipo...</option>
+            {teamsInCat.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Equipo 2</label>
+          <select 
+            value={t2}
+            onChange={(e) => setT2(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:border-[#e94560] outline-none transition-all appearance-none"
+          >
+            <option value="">Seleccionar equipo...</option>
+            {teamsInCat.filter(t => t !== t1).map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <button 
+        disabled={!selectedCat || !t1 || !t2}
+        onClick={() => onAdd(courtId, time, selectedCat, t1, t2)}
+        className="w-full bg-[#1a1a2e] text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#e94560] transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:grayscale disabled:pointer-events-none"
+      >
+        Añadir Partido
+      </button>
     </div>
   );
 }
