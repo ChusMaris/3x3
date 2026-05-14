@@ -819,34 +819,34 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-slate-50 font-sans text-slate-900">
       {/* Top Header */}
-      <header className="bg-[#1a1a2e] text-white py-1 md:py-4 px-4 md:px-8 border-b-4 border-[#e94560] flex items-center justify-between shadow-xl shrink-0 gap-4">
+      <header className="bg-[#1a1a2e] text-white py-1 md:py-3 px-4 md:px-8 border-b-2 md:border-b-4 border-[#e94560] flex items-center justify-between shadow-xl shrink-0 gap-2 md:gap-4 relative z-[100] transition-all short-compact">
         <div className="flex items-center gap-2 md:gap-4">
           <button 
             onClick={() => setCurrentTournament(null)}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors border border-white/10"
+            className="p-1.5 md:p-2 hover:bg-white/10 rounded-lg transition-colors border border-white/10"
             title="Volver al inicio"
           >
-            <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
+            <ArrowLeft className="w-3.5 h-3.5 md:w-5 md:h-5" />
           </button>
-          <div className="hidden sm:block bg-[#e94560] p-1.5 md:p-2 rounded-lg transform -rotate-3">
+          <div className="hidden lg:block bg-[#e94560] p-1.5 md:p-2 rounded-lg transform -rotate-3">
             <Trophy className="w-5 h-5 md:w-8 md:h-8 text-white" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-[12px] md:text-xl font-black italic tracking-tighter uppercase leading-none truncate">
-              {currentTournament.name} <span className="text-[#e94560] hidden xs:inline">3x3</span>
+            <h1 className="text-[10px] md:text-xl font-black italic tracking-tighter uppercase leading-none truncate max-w-[80px] xs:max-w-none">
+              {currentTournament.name} <span className="text-[#e94560] hidden md:inline">3x3</span>
             </h1>
-            <p className="text-[7px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 md:mt-1 truncate leading-none">
+            <p className="text-[6px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 md:mt-1 truncate leading-none">
               {new Date(currentTournament.event_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
             </p>
           </div>
         </div>
 
-        <div className="flex gap-1 md:gap-4 items-center">
+        <div className="flex gap-1 md:gap-4 items-center flex-1 justify-end">
           <button 
             onClick={() => setIsSidebarOpen(true)}
-            className="lg:hidden p-2 bg-[#16213e] rounded-lg border border-slate-700 text-slate-400 hover:text-white transition-colors"
+            className="lg:hidden p-1.5 bg-[#16213e] rounded-lg border border-slate-700 text-slate-400 hover:text-white transition-colors"
           >
-            <Menu className="w-5 h-5" />
+            <Settings className="w-4 h-4" />
           </button>
 
           <button 
@@ -857,34 +857,34 @@ export default function App() {
             {isSidebarVisible ? <Settings className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
-          <div className="flex bg-[#16213e] rounded-xl p-0.5 md:p-1 border border-slate-700 shadow-inner overflow-x-auto no-scrollbar">
+          <div className="flex gap-1 bg-[#16213e] rounded-lg md:rounded-xl p-0.5 px-2 border border-slate-700 shadow-inner shrink-0 shadow-lg">
             <button 
               onClick={() => setTournamentView('courts')}
-              className={`flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-2 rounded-lg text-[8px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'courts' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              className={`flex items-center justify-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-md md:rounded-lg text-[7px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'courts' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
             >
-              <MapPin className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">PISTAS</span>
+              <MapPin className="w-3.5 h-3.5 md:w-4 md:h-4" /> <span className="hidden xs:inline">PISTAS</span>
             </button>
             <button 
               onClick={() => setTournamentView('teams')}
-              className={`flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-2 rounded-lg text-[8px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'teams' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              className={`flex items-center justify-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-md md:rounded-lg text-[7px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'teams' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
             >
-              <Users className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">EQUIPOS</span>
+              <Users className="w-3.5 h-3.5 md:w-4 md:h-4" /> <span className="hidden xs:inline">EQUIPOS</span>
             </button>
             <button 
               onClick={() => { setTournamentView('matches'); if (viewMode === 'classification') setViewMode('grid'); }}
-              className={`flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-2 rounded-lg text-[8px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'matches' && (viewMode === 'grid' || viewMode === 'calendar') ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              className={`flex items-center justify-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-md md:rounded-lg text-[7px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'matches' && (viewMode === 'grid' || viewMode === 'calendar') ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
             >
-              <Calendar className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">CALENDARIO</span>
+              <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4" /> <span className="hidden xs:inline">HORARIOS</span>
             </button>
             <button 
               onClick={() => { setTournamentView('matches'); setViewMode('classification'); }}
-              className={`flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-2 rounded-lg text-[8px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'matches' && viewMode === 'classification' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              className={`flex items-center justify-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-md md:rounded-lg text-[7px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'matches' && viewMode === 'classification' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
             >
-              <ListOrdered className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">CLASIFICACIÓN</span>
+              <ListOrdered className="w-3.5 h-3.5 md:w-4 md:h-4" /> <span className="hidden xs:inline">TABLA</span>
             </button>
           </div>
           
-          <div className="hidden lg:flex items-center gap-4 border-l border-slate-700 pl-4">
+          <div className="hidden xl:flex items-center gap-4 border-l border-slate-700 pl-4">
             <div className="text-right">
               <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Canchas</p>
               <p className="font-mono text-lg font-black text-[#e94560] leading-none">{config.courtConfigs.length}</p>
@@ -908,24 +908,24 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsSidebarOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[140] md:hidden"
             />
           )}
         </AnimatePresence>
 
         {/* Sidebar */}
         <aside className={`
-          fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-slate-200 flex flex-col shadow-2xl shrink-0 transition-all duration-300 transform
+          fixed inset-y-0 left-0 z-[150] w-80 bg-white border-r border-slate-200 flex flex-col shadow-2xl shrink-0 transition-all duration-300 transform
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:relative lg:translate-x-0 
           ${isSidebarVisible ? 'lg:flex lg:w-80' : 'lg:hidden lg:w-0'}
         `}>
           <div className="flex items-center justify-between p-6 border-b border-slate-100 lg:border-b-0 lg:pb-0">
-            <div className="flex items-center gap-2 lg:hidden bg-[#1a1a2e] text-white p-6 -m-6 mb-0 w-full">
-              <Trophy className="w-5 h-5 text-[#e94560]" />
-              <span className="font-black italic text-sm tracking-tighter">CONFIGURACIÓN</span>
-              <button onClick={() => setIsSidebarOpen(false)} className="ml-auto p-2 hover:bg-white/10 rounded-lg">
-                <X className="w-5 h-5" />
+            <div className="flex items-center gap-2 lg:hidden bg-[#1a1a2e] text-white p-4 md:p-6 -m-6 mb-0 w-full short-compact">
+              <Trophy className="w-4 h-4 md:w-5 md:h-5 text-[#e94560]" />
+              <span className="font-black italic text-xs md:text-sm tracking-tighter">CONFIGURACIÓN</span>
+              <button onClick={() => setIsSidebarOpen(false)} className="ml-auto p-1.5 md:p-2 hover:bg-white/10 rounded-lg">
+                <X className="w-4 h-4 md:w-5 md:h-5" />
               </button>
             </div>
             {/* Desktop hide button */}
@@ -1130,57 +1130,31 @@ export default function App() {
         {/* Content Area */}
         <section className="flex-1 bg-slate-100 overflow-hidden flex flex-col min-w-0">
           {/* Tournament Actions Bar */}
-          <div className="bg-white border-b border-slate-200 px-4 md:px-8 py-0.5 md:py-3 flex items-center justify-between shrink-0 gap-4">
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setIsSidebarOpen(true)}
-                className="p-1.5 bg-slate-100 rounded-lg lg:hidden text-[#1a1a2e] hover:bg-slate-200 transition-colors"
-                title="Abrir configuración"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-              <h2 className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:block">
-                {tournamentView === 'teams' ? 'Gestión de Equipos' : viewMode === 'grid' ? 'Vista de Pistas' : viewMode === 'calendar' ? 'Calendario Completo' : 'Clasificación'}
+          <div className="bg-white border-b border-slate-200 px-4 md:px-8 py-1 md:py-2 flex items-center justify-between shrink-0 gap-2 md:gap-4 overflow-x-auto no-scrollbar short-hidden">
+            <div className="flex items-center gap-2 md:gap-3">
+              <h2 className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                {tournamentView === 'teams' ? 'Equipos' : viewMode === 'grid' ? 'Vista Pistas' : viewMode === 'calendar' ? 'Calendario' : 'Clasificación'}
               </h2>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
               <button
                 onClick={() => setIsLocked(!isLocked)}
-                className={`flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${isLocked ? 'bg-[#e94560] text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                className={`flex items-center gap-1 px-2 py-1 md:px-4 md:py-2 rounded-lg md:rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all ${isLocked ? 'bg-[#e94560] text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
                 title={isLocked ? "Desbloquear edición" : "Bloquear edición"}
               >
-                {isLocked ? (
-                  <>
-                    <Lock className="w-3.5 h-3.5" />
-                    <span className="hidden xs:inline">ABRIR CALENDARIO</span>
-                    <span className="xs:hidden">CERRADO</span>
-                  </>
-                ) : (
-                  <>
-                    <Unlock className="w-3.5 h-3.5" />
-                    <span className="hidden xs:inline">CERRAR CALENDARIO</span>
-                    <span className="xs:hidden">ABIERTO</span>
-                  </>
-                )}
+                {isLocked ? <Lock className="w-3 h-3 md:w-3.5 md:h-3.5" /> : <Unlock className="w-3 h-3 md:w-3.5 md:h-3.5" />}
+                <span className="hidden xs:inline ml-1">{isLocked ? 'CERRADO' : 'ABIERTO'}</span>
               </button>
 
-              <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+              <div className="h-6 w-px bg-slate-200" />
               
-              <button 
-                onClick={refreshCurrentTournament}
-                disabled={isRefreshing}
-                className="p-2 bg-slate-100 text-[#1a1a2e] rounded-xl hover:bg-slate-200 transition-all disabled:opacity-50"
-                title="Refrescar datos"
-              >
-                <RotateCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-[#e94560]' : ''}`} />
-              </button>
               <button 
                 onClick={saveTournament}
                 disabled={isSaving}
-                className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#1a1a2e] text-white rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all disabled:opacity-50"
+                className="flex items-center gap-1 px-2 py-1 md:px-4 md:py-2 bg-[#1a1a2e] text-white rounded-lg md:rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all disabled:opacity-50"
               >
-                <Save className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{isSaving ? 'Guardando...' : 'GUARDAR'}</span>
+                <Save className="w-3 h-3 md:w-3.5 md:h-3.5" />
+                <span className="hidden xs:inline ml-1">{isSaving ? '...' : 'GUARDAR'}</span>
               </button>
             </div>
           </div>
@@ -1192,171 +1166,147 @@ export default function App() {
                 <p className="text-sm font-black uppercase tracking-widest">Configura y pulsa "Generar" para ver los cruces</p>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 flex flex-col overflow-hidden relative">
                 {/* Unified Header with Toggle and Filters */}
-                <div className="bg-white border-b border-slate-200 p-2 md:p-4 flex flex-wrap items-center gap-3 shrink-0 px-4 md:px-8 shadow-sm z-[60]">
+                <div className="bg-white border-b border-slate-200 p-1 md:p-2.5 flex items-center justify-between gap-2 md:gap-3 shrink-0 px-4 md:px-8 shadow-sm z-[60] overflow-x-auto no-scrollbar short-compact">
                     {(viewMode === 'grid' || viewMode === 'calendar') && (
-                      <div className="flex bg-slate-100 p-0.5 md:p-1 rounded-xl shrink-0">
+                      <div className="flex bg-slate-100 p-0.5 md:p-1 rounded-lg md:rounded-xl shrink-0">
                         <button 
                           onClick={() => setViewMode('grid')}
-                          className={`px-3 md:px-4 py-1 md:py-1.5 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${viewMode === 'grid' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                          className={`px-2 md:px-4 py-1 md:py-1.5 rounded-md md:rounded-lg text-[7px] md:text-[9px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${viewMode === 'grid' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                          POR PISTA
+                          PISTAS
                         </button>
                         <button 
                           onClick={() => setViewMode('calendar')}
-                          className={`px-3 md:px-4 py-1 md:py-1.5 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${viewMode === 'calendar' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                          className={`px-2 md:px-4 py-1 md:py-1.5 rounded-md md:rounded-lg text-[7px] md:text-[9px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${viewMode === 'calendar' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                          CRONOLÓGICO
+                          HORAS
                         </button>
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2 md:gap-3 shrink-0 relative z-[70]">
-                      <Filter className="w-3.5 h-3.5 text-slate-400" />
-                      <button
-                        onClick={() => setShowCatFilter(!showCatFilter)}
-                        className={`bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 md:px-3 md:py-1.5 text-[10px] md:text-[11px] font-bold focus:ring-2 focus:ring-[#e94560]/20 outline-none min-w-[100px] md:min-w-[140px] text-left flex justify-between items-center transition-all ${showCatFilter ? 'border-[#e94560] ring-2 ring-[#e94560]/10' : ''}`}
-                      >
-                        <span className="truncate pr-2">
-                          {filterCats.length === 0 ? 'Categoría (Todas)' : `${filterCats.length === 1 ? filterCats[0] : `${filterCats.length} categorías`}`}
-                        </span>
-                        <ChevronRight className={`w-3 h-3 transition-transform shrink-0 ${showCatFilter ? 'rotate-90' : ''}`} />
-                      </button>
+                    <div className="flex items-center gap-1.5 md:gap-3 shrink-0 relative z-[70]">
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowCatFilter(!showCatFilter)}
+                          className={`bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 md:px-3 md:py-1.5 text-[9px] md:text-[11px] font-bold outline-none max-w-[120px] md:min-w-[140px] text-left flex justify-between gap-1 items-center transition-all ${showCatFilter ? 'border-[#e94560] ring-1 ring-[#e94560]/10' : ''}`}
+                        >
+                          <span className="truncate">
+                            {filterCats.length === 0 ? 'Cat.' : `${filterCats.length === 1 ? filterCats[0] : `${filterCats.length} Cat`}`}
+                          </span>
+                          <Filter className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 text-slate-400 shrink-0" />
+                        </button>
+
+                        <AnimatePresence>
+                          {showCatFilter && (
+                            <>
+                              <div className="fixed inset-0 z-[65]" onClick={() => setShowCatFilter(false)} />
+                              <motion.div
+                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                className="absolute top-full left-0 mt-2 w-[240px] bg-white rounded-xl shadow-2xl border border-slate-200 z-[70] py-2 max-h-[300px] overflow-y-auto custom-scrollbar"
+                              >
+                                <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50 mb-1 sticky top-0 z-10">
+                                  <span className="text-[9px] font-black uppercase text-slate-400">Filtrar</span>
+                                  <button onClick={() => setFilterCats([])} className="text-[9px] font-black uppercase text-[#e94560] hover:underline">Limpiar</button>
+                                </div>
+                                <div className="px-1">
+                                  {categories.map(cat => {
+                                    const isSelected = filterCats.includes(cat);
+                                    return (
+                                      <button
+                                        key={cat}
+                                        onClick={() => setFilterCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])}
+                                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left text-[10px] md:text-[11px] font-bold transition-all ${isSelected ? 'bg-[#e94560]/10 text-[#e94560]' : 'text-slate-600 hover:bg-slate-50'}`}
+                                      >
+                                        {cat}
+                                        {isSelected ? <CheckCircle2 className="w-3.5 h-3.5 text-[#e94560]" /> : <Circle className="w-3.5 h-3.5 text-slate-200" />}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </motion.div>
+                            </>
+                          )}
+                        </AnimatePresence>
+                      </div>
                       
-                      <AnimatePresence>
-                        {showCatFilter && (
-                          <>
-                            <div 
-                              className="fixed inset-0 z-[65]" 
-                              onClick={() => setShowCatFilter(false)} 
-                            />
-                            <motion.div
-                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                              className="absolute top-full left-0 mt-2 w-[240px] bg-white rounded-xl shadow-2xl border border-slate-200 z-[70] py-2 max-h-[400px] overflow-y-auto custom-scrollbar"
-                            >
-                              <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50 mb-1 sticky top-0 z-10">
-                                <span className="text-[9px] font-black uppercase text-slate-400">Seleccionar</span>
-                                <button 
-                                  onClick={() => setFilterCats([])}
-                                  className="text-[9px] font-black uppercase text-[#e94560] hover:underline"
-                                >
-                                  Limpiar
-                                </button>
-                              </div>
-                              <div className="px-1">
-                                {categories.map(cat => {
-                                  const isSelected = filterCats.includes(cat);
-                                  return (
-                                    <button
-                                      key={cat}
-                                      onClick={() => {
-                                        setFilterCats(prev => 
-                                          prev.includes(cat) 
-                                            ? prev.filter(c => c !== cat) 
-                                            : [...prev, cat]
-                                        );
-                                      }}
-                                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left text-[10px] md:text-[11px] font-bold transition-all ${isSelected ? 'bg-[#e94560]/10 text-[#e94560]' : 'text-slate-600 hover:bg-slate-50'}`}
-                                    >
-                                      {cat}
-                                      {isSelected ? (
-                                        <CheckCircle2 className="w-3.5 h-3.5 text-[#e94560]" />
-                                      ) : (
-                                        <Circle className="w-3.5 h-3.5 text-slate-200" />
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </motion.div>
-                          </>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowTeamFilter(!showTeamFilter)}
+                          className={`bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 md:px-3 md:py-1.5 text-[9px] md:text-[11px] font-bold outline-none max-w-[120px] md:min-w-[180px] text-left flex justify-between gap-1 items-center transition-all ${showTeamFilter ? 'border-[#e94560] ring-1 ring-[#e94560]/10' : ''}`}
+                        >
+                          <span className="truncate">
+                            {filterTeams.length === 0 ? 'Equipos' : `${filterTeams.length === 1 ? filterTeams[0] : `${filterTeams.length} Eq`}`}
+                          </span>
+                          <Search className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 text-slate-400 shrink-0" />
+                        </button>
 
-                    <div className="flex items-center gap-2 md:gap-3 shrink-0 relative z-[70]">
-                      <Search className="w-3.5 h-3.5 text-slate-400" />
-                      <button
-                        onClick={() => setShowTeamFilter(!showTeamFilter)}
-                        className={`bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 md:px-3 md:py-1.5 text-[10px] md:text-[11px] font-bold focus:ring-2 focus:ring-[#e94560]/20 outline-none min-w-[120px] md:min-w-[180px] text-left flex justify-between items-center transition-all ${showTeamFilter ? 'border-[#e94560] ring-2 ring-[#e94560]/10' : ''}`}
-                      >
-                        <span className="truncate pr-2">
-                          {filterTeams.length === 0 ? 'Equipo (Todos)' : `${filterTeams.length === 1 ? filterTeams[0] : `${filterTeams.length} equipos`}`}
-                        </span>
-                        <ChevronRight className={`w-3 h-3 transition-transform shrink-0 ${showTeamFilter ? 'rotate-90' : ''}`} />
-                      </button>
-
-                      <AnimatePresence>
-                        {showTeamFilter && (
-                          <>
-                            <div 
-                              className="fixed inset-0 z-[65]" 
-                              onClick={() => setShowTeamFilter(false)} 
-                            />
-                            <motion.div
-                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                              className="absolute top-full right-0 mt-2 w-[240px] bg-white rounded-xl shadow-2xl border border-slate-200 z-[70] py-2 max-h-[400px] overflow-y-auto custom-scrollbar"
-                            >
-                              <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50 mb-1 sticky top-0 z-10">
-                                <span className="text-[9px] font-black uppercase text-slate-400">Seleccionar</span>
-                                <button 
-                                  onClick={() => setFilterTeams([])}
-                                  className="text-[9px] font-black uppercase text-[#e94560] hover:underline"
-                                >
-                                  Limpiar
-                                </button>
+                        <AnimatePresence>
+                          {showTeamFilter && (
+                            <>
+                              <div className="fixed inset-0 z-[65]" onClick={() => setShowTeamFilter(false)} />
+                              <motion.div
+                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                className="absolute top-full right-0 mt-2 w-[240px] bg-white rounded-xl shadow-2xl border border-slate-200 z-[70] py-2 max-h-[300px] overflow-y-auto custom-scrollbar"
+                              >
+                                <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50 mb-1 sticky top-0 z-10">
+                                  <span className="text-[9px] font-black uppercase text-slate-400">Filtrar</span>
+                                  <button onClick={() => setFilterTeams([])} className="text-[9px] font-black uppercase text-[#e94560] hover:underline">Limpiar</button>
                                 </div>
                                 <div className="px-1">
                                   {teamNames.map((team, idx) => {
                                     if (!team) return null;
-                                    const name = team.name;
-                                    const isSelected = filterTeams.includes(name);
+                                    const isSelected = filterTeams.includes(team.name);
                                     const showCategoryHeader = (filterCats.length !== 1) && (idx === 0 || team.category !== teamNames[idx - 1]?.category);
-                                    
                                     return (
-                                      <div key={`${name}-${team.category}`}>
+                                      <div key={`${team.name}-${team.category}`}>
                                         {showCategoryHeader && (
-                                          <div className="px-3 py-1.5 mt-2 mb-1 bg-slate-100/50 text-[8px] font-black uppercase text-slate-500 rounded-sm border-l-2 border-slate-300">
-                                            {team.category}
-                                          </div>
+                                          <div className="px-3 py-1 mt-2 mb-1 bg-slate-100 text-[8px] font-black uppercase text-slate-500 rounded-sm border-l-2 border-slate-300">{team.category}</div>
                                         )}
                                         <button
-                                          onClick={() => {
-                                            setFilterTeams(prev => 
-                                              prev.includes(name) 
-                                                ? prev.filter(n => n !== name) 
-                                                : [...prev, name]
-                                            );
-                                          }}
+                                          onClick={() => setFilterTeams(prev => prev.includes(team.name) ? prev.filter(n => n !== team.name) : [...prev, team.name])}
                                           className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left transition-all ${isSelected ? 'bg-[#e94560]/10 text-[#e94560]' : 'text-slate-600 hover:bg-slate-50'}`}
                                         >
-                                          <div className="flex flex-col">
-                                            <span className="text-[10px] md:text-[11px] font-bold leading-tight">{name}</span>
-                                          </div>
-                                          {isSelected ? (
-                                            <CheckCircle2 className="w-3.5 h-3.5 text-[#e94560] shrink-0 ml-2" />
-                                          ) : (
-                                            <Circle className="w-3.5 h-3.5 text-slate-200 shrink-0 ml-2" />
-                                          )}
+                                          <span className="text-[10px] md:text-[11px] font-bold truncate">{team.name}</span>
+                                          {isSelected ? <CheckCircle2 className="w-3.5 h-3.5 text-[#e94560] shrink-0" /> : <Circle className="w-3.5 h-3.5 text-slate-200 shrink-0" />}
                                         </button>
                                       </div>
                                     );
                                   })}
-                              </div>
-                            </motion.div>
-                          </>
-                        )}
-                      </AnimatePresence>
+                                </div>
+                              </motion.div>
+                            </>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      {/* Compact Lock/Save for Short Screens */}
+                      <div className="hidden short:flex items-center gap-1 border-l border-slate-200 pl-2">
+                        <button
+                          onClick={() => setIsLocked(!isLocked)}
+                          className={`p-1.5 rounded-lg transition-all ${isLocked ? 'bg-[#e94560] text-white' : 'bg-slate-100 text-slate-400 hover:text-slate-600'}`}
+                          title={isLocked ? "Desbloquear" : "Bloquear"}
+                        >
+                          {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                        </button>
+                        <button 
+                          onClick={saveTournament}
+                          disabled={isSaving}
+                          className="p-1.5 bg-[#1a1a2e] text-white rounded-lg hover:bg-slate-800 transition-all disabled:opacity-50"
+                          title="Guardar"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="ml-auto text-[8px] md:text-[10px] font-black text-slate-400 shrink-0 whitespace-nowrap">Total: {filteredMatches.length}</div>
+                    <div className="hidden xs:block text-[8px] md:text-[10px] font-black text-slate-400 shrink-0 whitespace-nowrap">Resultados: {filteredMatches.length}</div>
                  </div>
-
 
                 {(viewMode === 'grid' || viewMode === 'calendar') ? (
 
@@ -1367,15 +1317,15 @@ export default function App() {
                         <div className="min-w-max flex flex-col">
                           {/* Sticky Header now inside the scrollable area */}
                           <div 
-                            className="flex sticky top-0 z-30 bg-[#1a1a2e] text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-800 select-none shadow-md"
-                            style={{ minWidth: `calc(80px + ${config.courtConfigs.length * 160}px)` }}
+                            className="flex sticky top-0 z-30 bg-[#1a1a2e] text-slate-400 text-[8px] md:text-[10px] font-black uppercase tracking-widest border-b border-slate-800 select-none shadow-md short-compact"
+                            style={{ minWidth: `calc(60px + ${config.courtConfigs.length * 130}px)` }}
                           >
-                            <div className="w-[80px] md:w-[120px] py-3 md:py-4 px-4 md:px-6 border-r border-slate-800 shrink-0 bg-[#1a1a2e] sticky left-0 z-40 shadow-[2px_0_5px_rgba(0,0,0,0.2)]">Horario</div>
+                            <div className="w-[60px] md:w-[120px] py-1.5 md:py-4 px-2 md:px-6 border-r border-slate-800 shrink-0 bg-[#1a1a2e] sticky left-0 z-40 shadow-[2px_0_5px_rgba(0,0,0,0.2)] short-compact">Horario</div>
                             {config.courtConfigs.map((c, i) => (
-                              <div key={i} className={`w-[160px] md:w-[180px] py-3 md:py-4 px-2 md:px-6 text-center border-r border-slate-800 shrink-0 bg-[#1a1a2e]`}>
+                              <div key={i} className={`w-[130px] md:w-[180px] py-1.5 md:py-4 px-1 md:px-6 text-center border-r border-slate-800 shrink-0 bg-[#1a1a2e] short-compact`}>
                                 Pista {c.id}
                                 {c.rimType === 'low' && (
-                                  <span className="block text-[7px] text-[#e94560] mt-1 font-black tracking-tighter uppercase">Aro Bajo</span>
+                                  <span className="block text-[6px] md:text-[7px] text-[#e94560] mt-0.5 font-black tracking-tighter uppercase short-hidden">Aro Bajo</span>
                                 )}
                               </div>
                             ))}
@@ -1386,11 +1336,11 @@ export default function App() {
                               {groupedMatchesByTime.map(([time, slotMatches], idx) => (
                                 <div key={time} className="flex flex-col">
                                   <div 
-                                    className="flex border-b border-white/20 min-h-[60px] md:min-h-[90px]"
-                                    style={{ minWidth: `calc(80px + ${config.courtConfigs.length * 160}px)` }}
+                                    className="flex border-b border-white/20 min-h-[40px] md:min-h-[90px] short-compact"
+                                    style={{ minWidth: `calc(60px + ${config.courtConfigs.length * 130}px)` }}
                                   >
-                                    <div className="w-[80px] md:w-[120px] bg-white sticky left-0 z-20 flex flex-col items-center justify-center border-r border-slate-200 px-2 md:px-4 shrink-0 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
-                                       <span className="font-mono text-sm md:text-base font-black text-slate-700">{time}</span>
+                                    <div className="w-[60px] md:w-[120px] bg-white sticky left-0 z-20 flex flex-col items-center justify-center border-r border-slate-200 px-1 md:px-4 shrink-0 shadow-[2px_0_5px_rgba(0,0,0,0.05)] short-compact">
+                                       <span className="font-mono text-xs md:text-base font-black text-slate-700 leading-none">{time}</span>
                                     </div>
                                     {config.courtConfigs.map((cc, courtIdx) => {
                                        const match = slotMatches.find(m => m.court === cc.id);
@@ -1402,7 +1352,7 @@ export default function App() {
                                        return (
                                          <div 
                                            key={courtIdx} 
-                                           className={`w-[160px] md:w-[180px] p-1 md:p-1.5 bg-white relative shrink-0 ${courtIdx < config.courtConfigs.length - 1 ? 'border-r border-slate-100' : ''} ${selectedMatchId && !match ? 'ring-2 ring-indigo-400 ring-inset cursor-pointer' : ''}`}
+                                           className={`w-[130px] md:w-[180px] p-1 md:p-1.5 bg-white relative shrink-0 ${courtIdx < config.courtConfigs.length - 1 ? 'border-r border-slate-100' : ''} ${selectedMatchId && !match ? 'ring-2 ring-indigo-400 ring-inset cursor-pointer' : ''}`}
                                            onClick={() => {
                                              if (selectedMatchId && !match && !isLocked && !hasScores) {
                                                handleMatchDrop(selectedMatchId, cc.id, time);
@@ -1448,54 +1398,37 @@ export default function App() {
                                                     return;
                                                   }
                                                   e.dataTransfer.setData("matchId", match.id);
-                                                  e.dataTransfer.effectAllowed = "move";
-                                                }}
-                                                className={`h-full rounded-lg border-l-4 p-2 md:p-3 shadow-sm flex flex-col justify-center cursor-move active:scale-95 transition-all ${getCatStyles(match.category)} ${isOtherHighlighted ? 'opacity-10 grayscale scale-95' : 'opacity-100'} ${filterTeams.length > 0 && isHighlighted ? 'ring-2 ring-[#e94560] scale-105 z-20 bg-white' : ''} ${match.phase === 'Min. Partidos' ? 'border-dashed border-2 opacity-90' : match.phase === 'Relleno Extra' ? 'border-dotted border-2 opacity-50 grayscale hover:grayscale-0 transition-all' : ''} ${selectedMatchId === match.id ? 'ring-4 ring-indigo-500 scale-105 z-30 shadow-indigo-200' : ''} ${isFinal ? 'ring-4 ring-amber-400 border-l-amber-500 bg-amber-50/50 shadow-lg scale-105 z-10' : isSemi ? 'ring-2 ring-indigo-300 border-l-indigo-500 bg-indigo-50/30 shadow-md' : ''}`}
+                                                   e.dataTransfer.effectAllowed = "move";
+                                                 }}
+                                                 className={`h-full rounded-lg border-l-4 p-1 md:p-3 shadow-sm flex flex-col justify-center cursor-move active:scale-95 transition-all ${getCatStyles(match.category)} ${isOtherHighlighted ? 'opacity-10 grayscale scale-95' : 'opacity-100'} ${filterTeams.length > 0 && isHighlighted ? 'ring-2 ring-[#e94560] scale-105 z-20 bg-white' : ''} ${match.phase === 'Min. Partidos' ? 'border-dashed border-2 opacity-90' : match.phase === 'Relleno Extra' ? 'border-dotted border-2 opacity-50 grayscale hover:grayscale-0 transition-all' : ''} ${selectedMatchId === match.id ? 'ring-4 ring-indigo-500 scale-105 z-30 shadow-indigo-200' : ''} ${isFinal ? 'ring-4 ring-amber-400 border-l-amber-500 bg-amber-50/50 shadow-lg scale-105 z-10' : isSemi ? 'ring-2 ring-indigo-300 border-l-indigo-500 bg-indigo-50/30 shadow-md' : ''}`}
                                               >
                                                  <div className="flex justify-between items-start mb-0.5 md:mb-1">
-                                                   <div className="flex items-center gap-1">
-                                                     <p className="text-[6px] md:text-[7px] font-black uppercase opacity-60">{match.category}</p>
+                                                   <div className="flex items-center gap-0.5 md:gap-1">
+                                                     <p className="text-[5px] md:text-[7px] font-black uppercase opacity-60 truncate max-w-[40px] md:max-w-none">{match.category}</p>
                                                      {match.phase === 'Min. Partidos' && (
-                                                       <span className="text-[5px] font-black bg-emerald-100 text-emerald-600 px-1 rounded-sm leading-tight uppercase" title="Cuentan para la clasificación">Min. Partidos</span>
+                                                       <span className="text-[4px] md:text-[5px] font-black bg-emerald-100 text-emerald-600 px-0.5 md:px-1 rounded-sm leading-tight uppercase" title="Cuentan para la clasificación">MIN.</span>
                                                      )}
                                                      {match.phase === 'Fase Relleno' && (
-                                                       <span className="text-[5px] font-black bg-slate-100 text-slate-400 px-1 rounded-sm leading-tight uppercase" title="No cuentan para la clasificación">Extras</span>
-                                                     )}
-                                                     {isFinal && (
-                                                       <span className="text-[5px] font-black bg-amber-400 text-white px-1 rounded-sm leading-tight uppercase flex items-center gap-0.5 animate-pulse">
-                                                         <Trophy className="w-2 h-2" /> FINAL
-                                                       </span>
-                                                     )}
-                                                     {isSemi && (
-                                                       <span className="text-[5px] font-black bg-indigo-500 text-white px-1 rounded-sm leading-tight uppercase shadow-sm">SEMI</span>
+                                                       <span className="text-[4px] md:text-[5px] font-black bg-slate-100 text-slate-400 px-0.5 md:px-1 rounded-sm leading-tight uppercase" title="No cuentan para la clasificación">EXT.</span>
                                                      )}
                                                    </div>
                                                    <div className="flex items-center gap-1">
                                                      {cc.rimType === 'low' && (
-                                                       <span className="text-[5px] md:text-[6px] font-black bg-[#e94560] text-white px-1 rounded-sm leading-tight">ARO BAJO</span>
+                                                       <span className="hidden xs:inline text-[4px] md:text-[6px] font-black bg-[#e94560] text-white px-0.5 md:px-1 rounded-sm leading-tight">LOW</span>
                                                      )}
                                                      {!isLocked && (
                                                        <button 
                                                          onClick={(e) => { e.stopPropagation(); deleteMatch(match.id); }}
-                                                         className="p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all shadow-sm border border-transparent hover:border-red-100 bg-white/50"
+                                                         className="p-0.5 md:p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all shadow-sm border border-transparent hover:border-red-100 bg-white/50"
                                                          title="Borrar partido"
                                                        >
-                                                         <Trash2 className="w-3.5 h-3.5" />
+                                                         <Trash2 className="w-2.5 h-2.5 md:w-3.5 md:h-3.5" />
                                                        </button>
                                                      )}
                                                    </div>
                                                  </div>
-                                                <div className={`text-[9px] md:text-[10px] font-bold leading-tight flex flex-col gap-0.5 ${isPlayoff ? 'text-slate-900 tracking-tight' : ''}`}>
+                                                <div className={`text-[7.5px] md:text-[10px] font-bold leading-tight flex flex-col gap-0.5 ${isPlayoff ? 'text-slate-900 tracking-tight' : ''}`}>
                                                   <span className="truncate">{match.team1}</span>
-                                                  <div className="flex items-center gap-1">
-                                                    <span className="text-slate-300 font-black italic text-[7px]">VS</span>
-                                                    {(match.phase === 'Ida' || match.phase.includes('(Ida)')) && (
-                                                      <span className="text-[6px] font-black bg-indigo-50 text-indigo-500 px-1 rounded uppercase">Ida</span>
-                                                    )}
-                                                    {(match.phase === 'Vuelta' || match.phase.includes('(Vuelta)')) && (
-                                                      <span className="text-[6px] font-black bg-orange-50 text-orange-500 px-1 rounded uppercase">Vuelta</span>
-                                                    )}
-                                                  </div>
                                                   <span className="truncate">{match.team2}</span>
                                                 </div>
                                               </div>
@@ -1516,9 +1449,9 @@ export default function App() {
                                     })}
                                   </div>
                                   {idx < groupedMatchesByTime.length - 1 && (
-                                    <div className="h-4 md:h-6 bg-slate-400/10 flex items-center px-6 relative border-b border-white/5" style={{ minWidth: `calc(80px + ${config.courtConfigs.length * 160}px)` }}>
+                                    <div className="h-3 md:h-6 bg-slate-400/10 flex items-center px-6 relative border-b border-white/5 short-compact" style={{ minWidth: `calc(80px + ${config.courtConfigs.length * 160}px)` }}>
                                       <div className="w-full h-px bg-white/10" />
-                                      <span className="absolute left-[100px] md:left-[140px] px-2 md:px-3 py-0.5 md:py-1 bg-[#1a1a2e] rounded-full text-[6px] md:text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] shadow-sm">
+                                      <span className="absolute left-[80px] md:left-[140px] px-2 md:px-3 py-0 md:py-1 bg-[#1a1a2e] rounded-full text-[6px] md:text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] shadow-sm">
                                         Pausa {config.breakDuration} min
                                       </span>
                                     </div>
@@ -1604,27 +1537,27 @@ export default function App() {
                     )}
                   </div>
                 ) : (
-                    <div className="flex-1 overflow-y-auto p-8 space-y-12 bg-white scroll-smooth custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto p-3 md:p-8 space-y-8 md:space-y-12 bg-white scroll-smooth custom-scrollbar">
                       {/* Classification view respects filterCats */}
                       {(categories as string[]).filter(cat => filterCats.length === 0 || filterCats.includes(cat)).map(cat => {
                       const catData = classification[cat];
                       return (
-                        <section key={cat} className="space-y-6">
-                          <h2 className="text-2xl font-black italic uppercase tracking-tighter text-[#1a1a2e]">{cat}</h2>
+                        <section key={cat} className="space-y-4 md:space-y-6">
+                          <h2 className="text-xl md:text-2xl font-black italic uppercase tracking-tighter text-[#1a1a2e]">{cat}</h2>
                           
                           {catData?.groups ? (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
                               {Object.entries(catData.groups as Record<string, any[]>).map(([letter, groupTeams]) => (
-                                <div key={letter} className="space-y-4">
-                                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] px-4 text-slate-400">Grupo {letter}</h3>
-                                  <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                                <div key={letter} className="space-y-2 md:space-y-4">
+                                  <h3 className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.2em] px-2 md:px-4 text-slate-400">Grupo {letter}</h3>
+                                  <div className="rounded-xl md:rounded-2xl border border-slate-200 overflow-hidden shadow-sm overflow-x-auto no-scrollbar">
                                     <ClassificationTable teams={groupTeams} filterTeams={filterTeams} />
                                   </div>
                                 </div>
                               ))}
                             </div>
                           ) : (
-                            <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                            <div className="rounded-xl md:rounded-2xl border border-slate-200 overflow-hidden shadow-sm overflow-x-auto no-scrollbar">
                               <ClassificationTable teams={catData?.all || []} filterTeams={filterTeams} />
                             </div>
                           )}
@@ -1658,7 +1591,7 @@ export default function App() {
         </section>
       </main>
 
-      <footer className="hidden md:flex h-12 bg-[#1a1a2e] text-white items-center justify-between px-8 text-[10px] font-bold uppercase tracking-widest shrink-0 border-t border-[#e94560]/30 shadow-2xl">
+      <footer className="hidden md:flex h-12 bg-[#1a1a2e] text-white items-center justify-between px-8 text-[10px] font-bold uppercase tracking-widest shrink-0 border-t border-[#e94560]/30 shadow-2xl short-hidden">
         <div className="flex gap-8">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
@@ -1717,16 +1650,16 @@ export default function App() {
 function ClassificationTable({ teams, filterTeams = [] }: { teams: any[], filterTeams?: string[] }) {
   return (
     <table className="w-full text-left">
-      <thead className="bg-[#1a1a2e] text-white text-[9px] font-black uppercase tracking-[0.2em]">
+      <thead className="bg-[#1a1a2e] text-white text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em]">
         <tr>
-          <th className="px-6 py-4">Equipos</th>
-          <th className="px-4 py-4 text-center">PJ</th>
-          <th className="px-4 py-4 text-center">PG</th>
-          <th className="px-4 py-4 text-center">PP</th>
-          <th className="px-4 py-4 text-center">Pts</th>
-          <th className="px-4 py-4 text-center">PF</th>
-          <th className="px-4 py-4 text-center">PC</th>
-          <th className="px-4 py-4 text-center">Dif</th>
+          <th className="px-3 md:px-6 py-2.5 md:py-4">Equipos</th>
+          <th className="px-1.5 md:px-4 py-2.5 md:py-4 text-center">PJ</th>
+          <th className="px-1.5 md:px-4 py-2.5 md:py-4 text-center">PG</th>
+          <th className="px-1.5 md:px-4 py-2.5 md:py-4 text-center">PP</th>
+          <th className="px-1.5 md:px-4 py-2.5 md:py-4 text-center bg-slate-800">Pts</th>
+          <th className="hidden sm:table-cell px-4 py-4 text-center">PF</th>
+          <th className="hidden sm:table-cell px-4 py-4 text-center">PC</th>
+          <th className="px-2 md:px-4 py-2.5 md:py-4 text-center">Dif</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-slate-100">
@@ -1734,20 +1667,20 @@ function ClassificationTable({ teams, filterTeams = [] }: { teams: any[], filter
           const isHighlighted = filterTeams.includes(t.name);
           return (
             <tr key={t.name} className={`hover:bg-slate-50 transition-colors ${idx === 0 ? 'bg-amber-50/50' : ''} ${isHighlighted ? 'bg-[#e94560]/10 ring-1 ring-[#e94560] relative z-10' : ''}`}>
-              <td className="px-6 py-4 flex items-center gap-3">
-                <span className={`w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-black ${idx === 0 ? 'bg-amber-400 text-white shadow-md' : isHighlighted ? 'bg-[#e94560] text-white' : 'bg-slate-100 text-slate-400'}`}>
+              <td className="px-3 md:px-6 py-2.5 md:py-4 flex items-center gap-1.5 md:gap-3">
+                <span className={`w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded-full text-[9px] md:text-[10px] font-black ${idx === 0 ? 'bg-amber-400 text-white shadow-md' : isHighlighted ? 'bg-[#e94560] text-white' : 'bg-slate-100 text-slate-400'}`}>
                   {idx + 1}
                 </span>
-                <span className={`font-bold ${isHighlighted ? 'text-[#e94560]' : 'text-slate-900'}`}>{t.name}</span>
-                {idx === 0 && <Trophy className="w-3 h-3 text-amber-500 fill-amber-500" />}
+                <span className={`text-[10px] md:text-[13px] font-bold truncate max-w-[80px] xs:max-w-none ${isHighlighted ? 'text-[#e94560]' : 'text-slate-900'}`}>{t.name}</span>
+                {idx === 0 && <Trophy className="w-2.5 h-2.5 md:w-3 md:h-3 text-amber-500 fill-amber-500" />}
               </td>
-              <td className="px-4 py-4 text-center font-mono font-bold text-slate-500">{t.pj}</td>
-              <td className="px-4 py-4 text-center font-mono font-bold text-green-600">{t.pg}</td>
-              <td className="px-4 py-4 text-center font-mono font-bold text-red-600">{t.pp}</td>
-              <td className="px-4 py-4 text-center font-mono font-black text-slate-900 bg-slate-50">{t.pts}</td>
-              <td className="px-4 py-4 text-center font-mono text-slate-500">{t.pf}</td>
-              <td className="px-4 py-4 text-center font-mono text-slate-500">{t.pc}</td>
-              <td className={`px-4 py-4 text-center font-mono font-bold ${t.pf - t.pc > 0 ? 'text-blue-500' : 'text-slate-400'}`}>
+              <td className="px-1.5 md:px-4 py-2.5 md:py-4 text-center font-mono text-[10px] md:text-xs font-bold text-slate-500">{t.pj}</td>
+              <td className="px-1.5 md:px-4 py-2.5 md:py-4 text-center font-mono text-[10px] md:text-xs font-bold text-green-600">{t.pg}</td>
+              <td className="px-1.5 md:px-4 py-2.5 md:py-4 text-center font-mono text-[10px] md:text-xs font-bold text-red-600">{t.pp}</td>
+              <td className="px-1.5 md:px-4 py-2.5 md:py-4 text-center font-mono text-[10px] md:text-xs font-black text-slate-900 bg-slate-50">{t.pts}</td>
+              <td className="hidden sm:table-cell px-4 py-4 text-center font-mono text-slate-500 uppercase">{t.pf}</td>
+              <td className="hidden sm:table-cell px-4 py-4 text-center font-mono text-slate-500">{t.pc}</td>
+              <td className={`px-2 md:px-4 py-2.5 md:py-4 text-center font-mono text-[10px] md:text-xs font-bold ${t.pf - t.pc > 0 ? 'text-blue-500' : 'text-slate-400'}`}>
                 {t.pf - t.pc > 0 ? `+${t.pf - t.pc}` : t.pf - t.pc}
               </td>
             </tr>
@@ -1774,29 +1707,29 @@ function PlayoffSection({ category, matches, onUpdateScore, isLocked, filterTeam
   const consolation = playoffMatches.find(m => m.phase === '3er y 4º Puesto');
 
   return (
-    <div className="mt-12 bg-[#1a1a2e] rounded-3xl p-10 overflow-hidden relative border border-white/5 shadow-2xl">
-      <div className="absolute top-0 right-0 p-8 opacity-5">
+    <div className="mt-8 md:mt-12 bg-[#1a1a2e] rounded-2xl md:rounded-3xl p-6 md:p-10 overflow-hidden relative border border-white/5 shadow-2xl">
+      <div className="absolute top-0 right-0 p-8 opacity-5 hidden md:block">
         <Trophy className="w-64 h-64 text-white" />
       </div>
 
-      <div className="flex justify-center mb-12">
-        <div className="bg-[#e94560] px-6 py-2 rounded-full border-t border-white/20 shadow-lg">
-          <span className="text-xs font-black text-white uppercase tracking-[0.3em]">PLAY-OFF</span>
+      <div className="flex justify-center mb-8 md:mb-12">
+        <div className="bg-[#e94560] px-4 md:px-6 py-1.5 md:py-2 rounded-full border-t border-white/20 shadow-lg">
+          <span className="text-[10px] md:text-xs font-black text-white uppercase tracking-[0.3em]">PLAY-OFF</span>
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-8 relative z-10">
+      <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-8 relative z-10">
         {/* Semifinals Column */}
         {(s1 || s2) && (
-          <div className="flex flex-col gap-12 w-64">
+          <div className="flex flex-col gap-6 md:gap-12 w-full md:w-64">
             {s1 && <MatchNode match={s1} label="Semifinal 1" onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />}
             {s2 && <MatchNode match={s2} label="Semifinal 2" onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />}
           </div>
         )}
 
-        {/* Connectors Semis -> Final */}
+        {/* Connectors Semis -> Final - Hidden on Mobile */}
         {(s1 || s2) && final && (
-          <div className="flex flex-col justify-center h-full">
+          <div className="hidden md:flex flex-col justify-center h-full">
             <div className="w-12 h-[120px] border-y-2 border-r-2 border-slate-500 rounded-r-xl translate-y-2" />
             <div className="w-8 h-px bg-slate-500 -translate-y-[58px] translate-x-12" />
           </div>
@@ -1804,12 +1737,12 @@ function PlayoffSection({ category, matches, onUpdateScore, isLocked, filterTeam
 
         {/* Finals Column (Main & 3rd/4th) */}
         {(final || consolation) && (
-          <div className="flex flex-col justify-center gap-10 w-80">
+          <div className="flex flex-col justify-center gap-6 md:gap-10 w-full md:w-80">
             {final && (
               <MatchNode match={final} label="GRAN FINAL" isMain onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />
             )}
             {consolation && (
-              <div className="opacity-90 scale-95 border-t border-white/5 pt-4">
+              <div className="opacity-90 scale-95 md:border-t md:border-white/5 md:pt-4">
                 <MatchNode match={consolation} label="3º y 4º PUESTO" onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />
               </div>
             )}
@@ -1827,19 +1760,19 @@ function MatchNode({ match, label, isMain = false, onUpdateScore, isLocked, filt
   };
 
   return (
-    <div className={`relative ${isMain ? 'scale-110' : ''}`}>
+    <div className={`relative ${isMain ? 'scale-100 md:scale-110' : ''}`}>
       <div className="flex justify-between items-end mb-1 px-2">
-        <div className="bg-slate-800 px-2 py-0.5 rounded text-[7px] font-black text-slate-400 uppercase tracking-widest border border-white/5">
+        <div className="bg-slate-800 px-1.5 md:px-2 py-0.5 rounded text-[6px] md:text-[7px] font-black text-slate-400 uppercase tracking-widest border border-white/5">
           {label}
         </div>
-        <div className="flex items-center gap-2 opacity-60">
-          <div className="flex items-center gap-1">
-            <Clock className="w-2.5 h-2.5 text-[#e94560]" />
-            <span className="text-[9px] font-mono font-black text-white">{formatTimeStr(match.startTime)}</span>
+        <div className="flex items-center gap-1.5 md:gap-2 opacity-60">
+          <div className="flex items-center gap-0.5 md:gap-1">
+            <Clock className="w-2 md:w-2.5 h-2 md:h-2.5 text-[#e94560]" />
+            <span className="text-[8px] md:text-[9px] font-mono font-black text-white">{formatTimeStr(match.startTime)}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <MapPin className="w-2.5 h-2.5 text-[#e94560]" />
-            <span className="text-[9px] font-black text-white">P{match.court}</span>
+          <div className="flex items-center gap-0.5 md:gap-1">
+            <MapPin className="w-2 md:w-2.5 h-2 md:h-2.5 text-[#e94560]" />
+            <span className="text-[8px] md:text-[9px] font-black text-white">P{match.court}</span>
           </div>
         </div>
       </div>
@@ -2168,30 +2101,30 @@ function TeamsManagementView({
   const totalTeams = Object.values(teamsByCategory).reduce((acc, teams) => acc + teams.length, 0);
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 bg-slate-50 custom-scrollbar">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50 custom-scrollbar">
+      <div className="max-w-7xl mx-auto space-y-4 md:space-y-8">
         {/* Management Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 bg-white p-4 md:p-8 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm">
           <div>
-            <h2 className="text-3xl font-black italic uppercase tracking-tighter text-[#1a1a2e] mb-2">Panel de Inscripciones</h2>
-            <p className="text-slate-500 text-sm font-medium">Gestiona las categorías y equipos registrados para este torneo.</p>
+            <h2 className="text-xl md:text-3xl font-black italic uppercase tracking-tighter text-[#1a1a2e] mb-1 md:mb-2">Panel de Inscripciones</h2>
+            <p className="text-slate-500 text-[10px] md:text-sm font-medium">Gestiona las categorías y equipos registrados para este torneo.</p>
           </div>
-          <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+          <div className="flex items-center gap-3 md:gap-4 bg-slate-50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-100">
             <div className="text-right">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Inscritos</p>
-              <p className="text-2xl font-black text-[#e94560]">{totalTeams} <span className="text-sm">EQUIPOS</span></p>
+              <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Inscritos</p>
+              <p className="text-lg md:text-2xl font-black text-[#e94560]">{totalTeams} <span className="text-[10px] md:text-sm uppercase">Equipos</span></p>
             </div>
-            <div className="w-12 h-12 bg-[#e94560]/10 rounded-xl flex items-center justify-center">
-              <Users className="w-6 h-6 text-[#e94560]" />
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#e94560]/10 rounded-lg md:rounded-xl flex items-center justify-center">
+              <Users className="w-5 h-5 md:w-6 md:h-6 text-[#e94560]" />
             </div>
           </div>
         </div>
 
         {/* Categories Editor */}
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+        <div className="bg-white p-4 md:p-8 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm space-y-4 md:space-y-6">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-              <Filter className="w-4 h-4" /> Configurar Categorías
+            <h3 className="text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+              <Filter className="w-3.5 h-3.5 md:w-4 md:h-4" /> Configurar Categorías
             </h3>
             <div className="flex gap-2">
             </div>
@@ -2199,33 +2132,33 @@ function TeamsManagementView({
           
           <div className="flex flex-wrap gap-3">
             {appCategories.map(cat => (
-              <div key={cat} className="group relative bg-slate-100 px-4 py-2 rounded-xl flex items-center gap-3 border border-slate-200 hover:border-[#e94560]/30 transition-all">
-                <span className="text-[11px] font-bold text-slate-700">{cat}</span>
+              <div key={cat} className="group relative bg-slate-100 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl flex items-center gap-2 md:gap-3 border border-slate-200 hover:border-[#e94560]/30 transition-all">
+                <span className="text-[10px] md:text-[11px] font-bold text-slate-700">{cat}</span>
                 {!isLocked && (
                   <button 
                     onClick={() => removeCategory(cat)}
-                    className="md:opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all p-1"
+                    className="opacity-100 md:opacity-0 md:group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all p-0.5 md:p-1"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3 h-3 md:w-3.5 md:h-3.5" />
                   </button>
                 )}
               </div>
             ))}
             {!isLocked && (
-              <div className="flex gap-2">
+              <div className="flex gap-1.5 md:gap-2">
                 <input 
                   type="text" 
                   value={newCatName}
                   onChange={e => setNewCatName(e.target.value)}
-                  placeholder="Nueva Categoría..."
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-[#e94560] outline-none transition-all w-48"
+                  placeholder="Nueva..."
+                  className="bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl px-3 py-1.5 md:px-4 md:py-2 text-[10px] md:text-xs font-bold focus:border-[#e94560] outline-none transition-all w-28 md:w-48"
                   onKeyDown={e => e.key === 'Enter' && addCategory()}
                 />
                 <button 
                   onClick={addCategory}
-                  className="bg-[#1a1a2e] text-white p-2 rounded-xl hover:bg-slate-800 transition-all"
+                  className="bg-[#1a1a2e] text-white p-1.5 md:p-2 rounded-lg md:rounded-xl hover:bg-slate-800 transition-all"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Plus className="w-4 h-4 md:w-5 md:h-5" />
                 </button>
               </div>
             )}
@@ -2233,19 +2166,19 @@ function TeamsManagementView({
         </div>
 
         {/* Categories Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {appCategories
             .filter(cat => !isLocked || (teamsByCategory[cat] || []).length > 0)
             .map(cat => (
-            <div key={cat} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col group hover:shadow-xl transition-all hover:border-[#e94560]/20">
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 group-hover:bg-white transition-colors">
+            <div key={cat} className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col group hover:shadow-lg transition-all hover:border-[#e94560]/20">
+              <div className="p-4 md:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 group-hover:bg-white transition-colors">
                 <div>
-                  <h4 className="text-lg font-black italic uppercase tracking-tighter text-[#1a1a2e]">{cat}</h4>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <h4 className="text-base md:text-lg font-black italic uppercase tracking-tighter text-[#1a1a2e]">{cat}</h4>
+                  <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     {teamsByCategory[cat]?.length || 0} Equipos
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 md:gap-2">
                   {(teamsByCategory[cat] || []).length > 0 && !isLocked && (
                     <div className="relative group/eraser">
                       <button 
@@ -2254,51 +2187,49 @@ function TeamsManagementView({
                           e.preventDefault();
                           e.stopPropagation();
                           if (confirmClear === cat) {
-                            console.log("LOG: Borrando categoría confirmada:", cat);
                             clearTeamsInCategory(cat);
                           } else {
-                            console.log("LOG: Solicitando confirmación para borrar:", cat);
                             setConfirmClear(cat);
                             setTimeout(() => setConfirmClear(prev => prev === cat ? null : prev), 5000);
                           }
                         }}
-                        className={`group relative flex items-center justify-center p-2 rounded-xl transition-all duration-300 ${
+                        className={`group relative flex items-center justify-center p-1.5 md:p-2 rounded-lg md:rounded-xl transition-all duration-300 ${
                           confirmClear === cat 
                             ? 'bg-red-500 text-white shadow-xl scale-105' 
                             : 'text-slate-400 hover:text-red-500 hover:bg-red-50'
                         }`}
-                        style={{ minWidth: confirmClear === cat ? '100px' : '40px' }}
+                        style={{ minWidth: confirmClear === cat ? (window.innerWidth < 768 ? '80px' : '100px') : '32px' }}
                         title={confirmClear === cat ? "Click de nuevo para borrar" : "Borrar todos los equipos"}
                       >
-                        <Eraser className={`w-5 h-5 transition-transform duration-300 ${confirmClear === cat ? 'scale-110 mr-1' : 'group-hover:rotate-12'}`} />
+                        <Eraser className={`w-4 h-4 md:w-5 md:h-5 transition-transform duration-300 ${confirmClear === cat ? 'scale-110 mr-1' : 'group-hover:rotate-12'}`} />
                         {confirmClear === cat && (
-                          <span className="text-[10px] font-black uppercase tracking-wider animate-pulse">¿BORRAR?</span>
+                          <span className="text-[8px] md:text-[10px] font-black uppercase tracking-wider animate-pulse whitespace-nowrap">¿BORRAR?</span>
                         )}
                       </button>
                     </div>
                   )}
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${(teamsByCategory[cat] || []).length > 0 ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-300'}`}>
-                    <Users className="w-5 h-5" />
+                  <div className={`w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center transition-all ${(teamsByCategory[cat] || []).length > 0 ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-300'}`}>
+                    <Users className="w-4 h-4 md:w-5 md:h-5" />
                   </div>
                 </div>
               </div>
               
-              <div className="p-6 space-y-4 flex-1 flex flex-col">
+              <div className="p-4 md:p-6 space-y-3 md:space-y-4 flex-1 flex flex-col">
                 {!isLocked && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5 md:gap-2">
                     <input 
                       type="text" 
                       value={newTeamInputs[cat] || ''}
                       onChange={e => setNewTeamInputs({ ...newTeamInputs, [cat]: e.target.value })}
-                      placeholder="Nombre del equipo..."
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-[#e94560] outline-none transition-all"
+                      placeholder="Equipo..."
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-2.5 text-[10px] md:text-xs font-bold focus:border-[#e94560] outline-none transition-all"
                       onKeyDown={e => e.key === 'Enter' && addTeamToCategory(cat)}
                     />
                     <button 
                       onClick={() => addTeamToCategory(cat)}
-                      className="bg-[#e94560] text-white p-2.5 rounded-xl hover:bg-[#ff516f] transition-all"
+                      className="bg-[#e94560] text-white p-2 md:p-2.5 rounded-lg md:rounded-xl hover:bg-[#ff516f] transition-all"
                     >
-                      <Plus className="w-5 h-5" />
+                      <Plus className="w-4 h-4 md:w-5 md:h-5" />
                     </button>
                   </div>
                 )}
@@ -2444,68 +2375,68 @@ function CourtsManagementView({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 bg-slate-50 custom-scrollbar">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50 custom-scrollbar">
+      <div className="max-w-7xl mx-auto space-y-4 md:space-y-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 bg-white p-4 md:p-8 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm">
           <div>
-            <h2 className="text-3xl font-black italic uppercase tracking-tighter text-[#1a1a2e] mb-2">Configuración de Pistas</h2>
-            <p className="text-slate-500 text-sm font-medium">Define el tipo de aro y las categorías permitidas por pista.</p>
+            <h2 className="text-xl md:text-3xl font-black italic uppercase tracking-tighter text-[#1a1a2e] mb-1 md:mb-2">Configuración de Pistas</h2>
+            <p className="text-slate-500 text-[10px] md:text-sm font-medium">Define el tipo de aro y las categorías permitidas por pista.</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 md:gap-4">
             {!isLocked && (
               <button 
                 onClick={addCourt}
-                className="flex items-center gap-2 bg-[#e94560] text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#ff516f] transition-all shadow-xl active:scale-95"
+                className="flex items-center justify-center gap-2 bg-[#e94560] text-white px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-black text-[10px] md:text-xs uppercase tracking-widest hover:bg-[#ff516f] transition-all shadow-xl active:scale-95"
               >
-                <Plus className="w-4 h-4" /> AÑADIR PISTA
+                <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" /> AÑADIR PISTA
               </button>
             )}
-            <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <div className="flex items-center gap-3 md:gap-4 bg-slate-50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-100">
               <div className="text-right">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Pistas</p>
-                <p className="text-2xl font-black text-[#1a1a2e]">{config.courtConfigs.length}</p>
+                <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Pistas</p>
+                <p className="text-lg md:text-2xl font-black text-[#1a1a2e]">{config.courtConfigs.length}</p>
               </div>
-              <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center">
-                <MapPin className="w-6 h-6 text-indigo-600" />
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-indigo-50 rounded-lg md:rounded-xl flex items-center justify-center">
+                <MapPin className="w-5 h-5 md:w-6 md:h-6 text-indigo-600" />
               </div>
             </div>
           </div>
         </div>
 
         {config.courtConfigs.length === 0 ? (
-          <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 p-20 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-              <MapPin className="w-8 h-8 text-slate-300" />
+          <div className="bg-white rounded-2xl md:rounded-3xl border-2 border-dashed border-slate-200 p-10 md:p-20 flex flex-col items-center justify-center text-center">
+            <div className="w-12 h-12 md:w-16 md:h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+              <MapPin className="w-6 h-6 md:w-8 md:h-8 text-slate-300" />
             </div>
-            <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest mb-2">No hay pistas configuradas</h3>
-            <p className="text-slate-400 max-w-sm mb-8">Añade pistas para poder generar el calendario del torneo.</p>
+            <h3 className="text-base md:text-xl font-black text-slate-400 uppercase tracking-widest mb-2">No hay pistas configuradas</h3>
+            <p className="text-[11px] md:text-slate-400 max-w-sm mb-6 md:mb-8">Añade pistas para poder generar el calendario del torneo.</p>
             <button 
               onClick={addCourt}
-              className="bg-[#1a1a2e] text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg"
+              className="bg-[#1a1a2e] text-white px-6 md:px-8 py-3 md:py-4 rounded-xl md:rounded-2xl font-black text-xs md:text-sm uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg"
             >
               AÑADIR MI PRIMERA PISTA
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {config.courtConfigs.map((court, idx) => (
               <motion.div 
                 key={court.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
-                className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col group hover:shadow-xl transition-all"
+                className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col group hover:shadow-lg transition-all"
               >
                 {/* Court Header */}
-                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 group-hover:bg-white transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#1a1a2e] text-white rounded-xl flex items-center justify-center font-black italic text-xl shadow-lg">
+                <div className="p-4 md:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 group-hover:bg-white transition-colors">
+                  <div className="flex items-center gap-2.5 md:gap-3">
+                    <div className="w-8 h-8 md:w-10 md:h-10 bg-[#1a1a2e] text-white rounded-lg md:rounded-xl flex items-center justify-center font-black italic text-base md:text-xl shadow-lg">
                       {court.id}
                     </div>
                     <div>
-                      <h4 className="text-lg font-black italic uppercase tracking-tighter text-[#1a1a2e]">Pista {court.id}</h4>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      <h4 className="text-base md:text-lg font-black italic uppercase tracking-tighter text-[#1a1a2e]">Pista {court.id}</h4>
+                      <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">
                         {court.allowedCategories.length} categorías permitidas
                       </p>
                     </div>
@@ -2513,32 +2444,32 @@ function CourtsManagementView({
                   {!isLocked && (
                     <button 
                       onClick={() => removeCourt(court.id)}
-                      className="text-slate-300 hover:text-red-500 transition-colors p-2"
+                      className="text-slate-300 hover:text-red-500 transition-colors p-1.5 md:p-2"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                     </button>
                   )}
                 </div>
 
                 {/* Court Content */}
-                <div className="p-6 space-y-6">
+                <div className="p-4 md:p-6 space-y-4 md:space-y-6">
                   {/* Rim Type Toggle */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <div className="space-y-2 md:space-y-3">
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                        TIPO DE ARO
                     </label>
-                    <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                    <div className="flex gap-1.5 md:gap-2 p-1 bg-slate-100 rounded-lg md:rounded-xl">
                       <button 
                         disabled={isLocked}
                         onClick={() => updateCourt(court.id, { rimType: 'normal' })}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase transition-all ${court.rimType === 'normal' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                        className={`flex-1 flex items-center justify-center gap-2 py-1.5 md:py-2 rounded-md md:rounded-lg text-[10px] md:text-xs font-black uppercase transition-all ${court.rimType === 'normal' ? 'bg-white text-[#1a1a2e] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                       >
                          Normal
                       </button>
                       <button 
                         disabled={isLocked}
                         onClick={() => updateCourt(court.id, { rimType: 'low' })}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase transition-all ${court.rimType === 'low' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                        className={`flex-1 flex items-center justify-center gap-2 py-1.5 md:py-2 rounded-md md:rounded-lg text-[10px] md:text-xs font-black uppercase transition-all ${court.rimType === 'low' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
                       >
                          Aro Bajo
                       </button>
@@ -2546,9 +2477,9 @@ function CourtsManagementView({
                   </div>
 
                   {/* Categories Selector */}
-                  <div className="space-y-3">
+                  <div className="space-y-2 md:space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      <label className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">
                         Categorías Permitidas
                       </label>
                       {!isLocked && (
@@ -2557,14 +2488,14 @@ function CourtsManagementView({
                             const allAllowed = court.allowedCategories.length === categories.length;
                             updateCourt(court.id, { allowedCategories: allAllowed ? [] : [...categories] });
                           }}
-                          className="text-[9px] font-black text-[#e94560] uppercase tracking-tighter hover:underline"
+                          className="text-[8px] md:text-[9px] font-black text-[#e94560] uppercase tracking-tighter hover:underline"
                         >
                           {court.allowedCategories.length === categories.length ? 'QUITAR TODAS' : 'SELECCIONAR TODAS'}
                         </button>
                       )}
                     </div>
                     
-                    <div className="grid grid-cols-1 gap-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                    <div className="grid grid-cols-1 gap-1.5 md:gap-2 max-h-[180px] md:max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
                       {([...categories].sort((a, b) => {
                         const aSelected = court.allowedCategories.includes(a);
                         const bSelected = court.allowedCategories.includes(b);
@@ -2580,13 +2511,13 @@ function CourtsManagementView({
                             initial={false}
                             disabled={isLocked}
                             onClick={() => toggleCategory(court.id, cat)}
-                            className={`flex items-center justify-between p-3 rounded-xl border transition-all text-left ${isSelected ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-300'}`}
+                            className={`flex items-center justify-between p-2.5 md:p-3 rounded-lg md:rounded-xl border transition-all text-left ${isSelected ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-300'}`}
                           >
-                            <span className="text-[11px] font-bold uppercase truncate">{cat}</span>
+                            <span className="text-[10px] md:text-[11px] font-bold uppercase truncate">{cat}</span>
                             {isSelected ? (
-                              <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                              <CheckCircle2 className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-600 shrink-0" />
                             ) : (
-                              <Circle className="w-4 h-4 text-slate-200 shrink-0" />
+                              <Circle className="w-3.5 h-3.5 md:w-4 md:h-4 text-slate-200 shrink-0" />
                             )}
                           </motion.button>
                         );
@@ -2596,9 +2527,9 @@ function CourtsManagementView({
                 </div>
 
                 {/* Footer Insight */}
-                <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
-                  <Info className="w-3.5 h-3.5 text-slate-300" />
-                  <p className="text-[9px] font-bold text-slate-400 leading-tight">
+                <div className="px-5 md:px-6 py-3 md:py-4 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+                  <Info className="w-3 md:w-3.5 h-3 md:h-3.5 text-slate-300" />
+                  <p className="text-[8px] md:text-[9px] font-bold text-slate-400 leading-tight">
                     {court.rimType === 'low' 
                       ? 'Recomendada para categorías Baby o Benjamín.' 
                       : 'Equipada con aros a altura reglamentaria (3.05m).'}

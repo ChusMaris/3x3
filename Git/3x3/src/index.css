@@ -30,3 +30,14 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-300;
 }
+
+@media (max-height: 550px) {
+  .short-hidden {
+    display: none !important;
+  }
+  .short-compact {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    min-height: 0 !important;
+  }
+}
