@@ -40,6 +40,7 @@ export interface ScheduleConfig {
   generalBreakTime: string; // "11:30"
   generalBreakDuration: number; // 15
   useFillPhase?: boolean; // Toggle for full calendar filling
+  playoffThreshold: number; // Number of teams from which to start playoffs
 }
 
 export function parseTeams(input: string): Team[] {
@@ -116,8 +117,8 @@ function generateTournamentMatchups(teams: Team[], config: ScheduleConfig): Matc
       }
       allMatchups.push({ category: cat, a: '1º Clasificado', b: '2º Clasificado', phase: 'Final', priority: 10 });
     }
-    else if (n <= 6) {
-      // 4-6 teams: Single league.
+    else if (n < (config.playoffThreshold || 6)) {
+      // Teams up to threshold: Single league.
       for (let i = 0; i < n; i++) {
         for (let j = i + 1; j < n; j++) {
           const [t1, t2] = (i + j) % 2 === 0 ? [catTeams[i].name, catTeams[j].name] : [catTeams[j].name, catTeams[i].name];
@@ -127,7 +128,7 @@ function generateTournamentMatchups(teams: Team[], config: ScheduleConfig): Matc
       allMatchups.push({ category: cat, a: '1º Clasificado', b: '2º Clasificado', phase: 'Final', priority: 10 });
     }
     else {
-      // 7-8 teams: 2 groups
+      // 7-8 teams: 2 groups (or less if threshold is lower)
       const groupA = catTeams.slice(0, Math.ceil(n/2));
       const groupB = catTeams.slice(Math.ceil(n/2));
 
@@ -162,6 +163,11 @@ function generateTournamentMatchups(teams: Team[], config: ScheduleConfig): Matc
       // Semis
       allMatchups.push({ category: cat, a: '1º Gr.A', b: '2º Gr.B', phase: 'Semifinal 1', priority: 5 });
       allMatchups.push({ category: cat, a: '1º Gr.B', b: '2º Gr.A', phase: 'Semifinal 2', priority: 5 });
+      
+      // 3º y 4º Puesto (Should always be possible if we have Semis)
+      allMatchups.push({ category: cat, a: 'Perdedor Semifinal 1', b: 'Perdedor Semifinal 2', phase: '3er y 4º Puesto', priority: 10 });
+
+      // Finals
       allMatchups.push({ category: cat, a: 'Ganador Semifinal 1', b: 'Ganador Semifinal 2', phase: 'Final', priority: 10 });
     }
   });
@@ -223,11 +229,24 @@ export function generateSchedule(teams: Team[], config: ScheduleConfig, initialM
   const [endH, endM] = (config.endTime || "14:00").split(':').map(Number);
   const [breakH, breakM] = (config.generalBreakTime || "12:00").split(':').map(Number);
 
+  const alignTo15 = (timeMs: number, direction: 'up' | 'down' = 'down') => {
+    const date = new Date(timeMs);
+    const mins = date.getMinutes();
+    const alignedMins = direction === 'down' 
+      ? Math.floor(mins / 15) * 15 
+      : Math.ceil(mins / 15) * 15;
+    date.setMinutes(alignedMins, 0, 0);
+    return date.getTime();
+  };
+
   let baseTime = new Date();
   baseTime.setHours(startH || 9, startM || 0, 0, 0);
+  baseTime = new Date(alignTo15(baseTime.getTime(), 'up')); // Ensure start is aligned
 
   const finalEndTime = new Date(baseTime);
   finalEndTime.setHours(endH || 14, endM || 0, 0, 0);
+  const alignedFinalEnd = alignTo15(finalEndTime.getTime(), 'down');
+  finalEndTime.setTime(alignedFinalEnd);
 
   // Safety: if end time is before start time, assume it's the next day
   if (finalEndTime.getTime() <= baseTime.getTime()) {
@@ -248,7 +267,7 @@ export function generateSchedule(teams: Team[], config: ScheduleConfig, initialM
   // If initialMatches provided, populate the state from them
   if (initialMatches) {
     initialMatches.forEach(m => {
-      const endT = m.endTime.getTime() + config.breakDuration * 60000;
+      const endT = alignTo15(m.endTime.getTime() + config.breakDuration * 60000, 'up');
       teamNextAvailable.set(m.team1, Math.max(teamNextAvailable.get(m.team1) || 0, endT));
       teamNextAvailable.set(m.team2, Math.max(teamNextAvailable.get(m.team2) || 0, endT));
       teamGamesCount.set(m.team1, (teamGamesCount.get(m.team1) || 0) + 1);
@@ -284,28 +303,118 @@ export function generateSchedule(teams: Team[], config: ScheduleConfig, initialM
     let safetyCounter = 0;
     const MAX_ITERATIONS = 5000;
 
-    const playoffMatchups = pendingMatchups.filter(m => m.priority >= 5);
-    // Determine maximum sequential rounds needed across any category/court constraint
-    // Calculate effective rounds needed
-    const catDepth = new Map<string, number>();
-    playoffMatchups.forEach(m => {
-      const current = catDepth.get(m.category) || 0;
-      // If we have semis (5) and finals (10), that's 2 levels.
-      if (m.priority === 10) catDepth.set(m.category, Math.max(current, 1));
-      if (m.priority === 5) catDepth.set(m.category, Math.max(current, 2));
-    });
-    const maxCatDepth = Array.from(catDepth.values()).reduce((max, d) => Math.max(max, d), 0);
-    
-    // Global constraint: how many games we can fit per slot across all courts
-    const globalRounds = Math.ceil(playoffMatchups.length / courts.length);
-    const roundsNeeded = Math.max(maxCatDepth, globalRounds);
-    
-    const slotSize = (config.gameDuration + config.breakDuration) * 60000;
-    // Buffer to ensure group phase ends with enough time for playoffs
-    const reservedBuffer = roundsNeeded * slotSize;
-    const groupCutoff = finalEndTime.getTime() - reservedBuffer;
+    // PASS 1: Playoff Phase (Priority >= 5)
+    // We schedule these FIRST backwards from the end of the day to ensure they get the best slots.
+    const playoffCategories = Array.from(new Set(teams.map(t => t.category)));
+    const courtPlayoffNextEnd = new Map<number, number>();
+    courts.forEach(c => courtPlayoffNextEnd.set(c.id, finalEndTime.getTime()));
 
-    // PASS 1: Group Phase (Priority < 5)
+    const categoryConstraint = new Map<string, number>();
+    playoffCategories.forEach(cat => categoryConstraint.set(cat, finalEndTime.getTime()));
+
+    const playoffPrios = priorities.filter(p => p >= 5).sort((a, b) => b - a); // 10 (Finals), then 5 (Semis)
+    const tournamentStartTime = baseTime.getTime();
+
+    for (const prio of playoffPrios) {
+      let phaseMatchups = seededShuffle(pendingMatchups.filter(m => m.priority === prio), runSeed + prio);
+      const tierMinStartForCategory = new Map<string, number>();
+      
+      let pSafety = 0;
+      while (phaseMatchups.length > 0 && pSafety < 500) {
+        pSafety++;
+        let bestMatchIdx = -1;
+        let bestCourtId = -1;
+        let latestEndFound = -1;
+
+        for (let i = 0; i < phaseMatchups.length; i++) {
+          const m = phaseMatchups[i];
+          const candidates = courts.filter(c => {
+            const isCatAllowed = c.allowedCategories.length === 0 || c.allowedCategories.includes(m.category);
+            if (!isCatAllowed) return false;
+            // Rim type check
+            if (c.allowedCategories.length === 0) {
+              const catNeedsSmall = isSmallBasketCat(m.category);
+              if (catNeedsSmall && !c.isSmallBasket) return false;
+              if (!catNeedsSmall && c.isSmallBasket) return false;
+            }
+            return true;
+          });
+
+          if (candidates.length === 0) continue;
+
+          for (const court of candidates) {
+            const availableCourtEnd = courtPlayoffNextEnd.get(court.id) || 0;
+            const catEndLimit = categoryConstraint.get(m.category) || 0;
+            const availableEnd = Math.min(availableCourtEnd, catEndLimit);
+            
+            // The slot size is effectively 15 minutes as per user grid requirement
+            const slotMs = 15 * 60000;
+            const matchStart = availableEnd - slotMs;
+            
+            if (matchStart < tournamentStartTime) continue;
+
+            const isTeamBusy = matches.some(em => {
+               const emStart = em.startTime.getTime();
+               const emEnd = em.endTime.getTime() + config.breakDuration * 60000;
+               const thisStart = matchStart;
+               const thisEnd = availableEnd + config.breakDuration * 60000;
+               const overlap = (thisStart < emEnd && thisEnd > emStart);
+               if (!overlap) return false;
+               return (em.category === m.category) && (em.team1 === m.a || em.team1 === m.b || em.team2 === m.a || em.team2 === m.b);
+            });
+
+            if (isTeamBusy) continue;
+
+            if (bestMatchIdx === -1 || availableEnd > latestEndFound) {
+              bestMatchIdx = i;
+              bestCourtId = court.id;
+              latestEndFound = availableEnd;
+            }
+          }
+        }
+
+        if (bestMatchIdx !== -1) {
+          const m = phaseMatchups.splice(bestMatchIdx, 1)[0];
+          const slotEnd = latestEndFound;
+          const slotStart = slotEnd - 15 * 60000;
+          const matchStart = slotStart;
+          const matchEnd = matchStart + (config.gameDuration * 60000);
+          
+          tierMinStartForCategory.set(m.category, Math.min(tierMinStartForCategory.get(m.category) || Infinity, matchStart));
+
+          matches.push({
+            id: `${m.category.replace(/[^A-Z0-9]/gi, '')}-${matches.length + 1}`,
+            category: m.category, phase: m.phase,
+            team1: m.a, team2: m.b,
+            startTime: new Date(matchStart), endTime: new Date(matchEnd), court: bestCourtId
+          });
+
+          courtPlayoffNextEnd.set(bestCourtId, slotStart);
+          
+          const nextReadyTime = matchEnd + config.breakDuration * 60000;
+          if (m.phase.startsWith('Semifinal')) {
+            teamNextAvailable.set(`Ganador ${m.phase}`, nextReadyTime);
+            teamNextAvailable.set(`Perdedor ${m.phase}`, nextReadyTime);
+          }
+        } else {
+          break;
+        }
+      }
+
+      tierMinStartForCategory.forEach((minStart, cat) => {
+        const currentConstraint = categoryConstraint.get(cat) || Infinity;
+        // Ensure the constraint is aligned to 15m downwards
+        const alignedConstraint = alignTo15(minStart - 2 * 60000, 'down'); 
+        categoryConstraint.set(cat, Math.min(currentConstraint, alignedConstraint));
+      });
+    }
+
+    const isSlotOccupied = (courtId: number, start: number, end: number, buffer: number) => {
+       return matches.some(m => m.court === courtId && (start < m.endTime.getTime() + buffer && end > m.startTime.getTime() - buffer));
+    };
+
+    // PASS 2: Group Phase (Priority < 5)
+    // We schedule these forwards into the remaining gaps.
     for (const prio of priorities.filter(p => p < 5)) {
       let phaseMatchups = seededShuffle(pendingMatchups.filter(m => m.priority === prio), runSeed + prio);
       while (phaseMatchups.length > 0 && safetyCounter < MAX_ITERATIONS) {
@@ -323,12 +432,13 @@ export function generateSchedule(teams: Team[], config: ScheduleConfig, initialM
         });
 
         for (const court of courts) {
-          if (court.nextAvailable >= groupCutoff) continue;
+          if (court.nextAvailable >= finalEndTime.getTime()) continue;
 
           if (court.nextAvailable >= generalBreakStart.getTime() && court.nextAvailable < generalBreakEnd.getTime()) {
             court.nextAvailable = generalBreakEnd.getTime();
             continue;
           }
+
           const matchIndex = phaseMatchups.findIndex(m => {
             const isCatAllowed = court.allowedCategories.length === 0 || court.allowedCategories.includes(m.category);
             if (!isCatAllowed) return false;
@@ -339,68 +449,54 @@ export function generateSchedule(teams: Team[], config: ScheduleConfig, initialM
             }
             const aFree = teamNextAvailable.get(m.a) || 0;
             const bFree = teamNextAvailable.get(m.b) || 0;
-            return aFree <= court.nextAvailable && bFree <= court.nextAvailable;
+            const canStartRaw = Math.max(aFree, bFree, court.nextAvailable);
+            const canStart = alignTo15(canStartRaw, 'up');
+            const canEnd = canStart + config.gameDuration * 60000;
+            
+            if (canEnd > finalEndTime.getTime()) return false;
+            
+            // Intersection with break
+            if (canStart < generalBreakStart.getTime() && canEnd > generalBreakStart.getTime()) return false;
+
+            // Collision with already scheduled playoffs (using 15 min buffer)
+            if (isSlotOccupied(court.id, canStart, canEnd, 5 * 60000)) return false;
+
+            return true;
           });
 
           if (matchIndex !== -1) {
             const m = phaseMatchups.splice(matchIndex, 1)[0];
-            const matchStart = new Date(court.nextAvailable);
-            if (matchStart.getTime() < generalBreakStart.getTime() && (matchStart.getTime() + config.gameDuration * 60000) > generalBreakStart.getTime()) {
-              court.nextAvailable = generalBreakEnd.getTime();
-              phaseMatchups.unshift(m);
-              matchFound = true;
-              break;
-            }
+            const aFree = teamNextAvailable.get(m.a) || 0;
+            const bFree = teamNextAvailable.get(m.b) || 0;
+            const matchStartRaw = Math.max(aFree, bFree, court.nextAvailable);
+            const matchStart = new Date(alignTo15(matchStartRaw, 'up'));
             const matchEnd = new Date(matchStart.getTime() + config.gameDuration * 60000);
-            if (matchEnd.getTime() > groupCutoff) {
-              court.nextAvailable = groupCutoff; // Push to reserved zone
-              phaseMatchups.unshift(m);
-              matchFound = true;
-              break;
-            }
             
             matches.push({
               id: `${m.category.replace(/[^A-Z0-9]/gi, '')}-${matches.length + 1}`,
-              category: m.category,
-              phase: m.phase,
-              team1: m.a,
-              team2: m.b,
-              startTime: matchStart,
-              endTime: matchEnd,
-              court: court.id
+              category: m.category, phase: m.phase,
+              team1: m.a, team2: m.b,
+              startTime: matchStart, endTime: matchEnd, court: court.id
             });
 
-            categoryGroupFinishedAt.set(m.category, Math.max(categoryGroupFinishedAt.get(m.category) || 0, matchEnd.getTime()));
-            const teamNextAvailableTime = matchEnd.getTime() + config.breakDuration * 60000;
+            const teamNextAvailableTime = alignTo15(matchStart.getTime() + 15 * 60000, 'up');
             court.nextAvailable = teamNextAvailableTime;
             teamNextAvailable.set(m.a, teamNextAvailableTime);
             teamNextAvailable.set(m.b, teamNextAvailableTime);
             teamGamesCount.set(m.a, (teamGamesCount.get(m.a) || 0) + 1);
             teamGamesCount.set(m.b, (teamGamesCount.get(m.b) || 0) + 1);
-            lastOpponent.set(m.a, m.b);
-            lastOpponent.set(m.b, m.a);
             matchFound = true;
             break;
           }
         }
         if (!matchFound && phaseMatchups.length > 0) {
-          let nextReady = Infinity;
-          phaseMatchups.forEach(m => {
-            const ready = Math.max(teamNextAvailable.get(m.a) || 0, teamNextAvailable.get(m.b) || 0);
-            if (ready < nextReady) nextReady = ready;
-          });
-          const minCourt = Math.min(...courts.map(c => c.nextAvailable));
-          const finalTarget = Math.min(groupCutoff, Math.max(minCourt, nextReady));
-          courts.forEach(c => { if (c.nextAvailable < finalTarget) c.nextAvailable = finalTarget; });
-          if (nextReady === Infinity || finalTarget >= groupCutoff) break;
+          // Push court availability to the next possible "free" spot
+          let minNext = Infinity;
+          courts.forEach(c => { if(c.nextAvailable < minNext) minNext = c.nextAvailable; });
+          courts.forEach(c => { if(c.nextAvailable === minNext) c.nextAvailable += 15 * 60000; });
         }
       }
     }
-
-    // PASS 2: Min Games Filler (before playoffs)
-    const isOccupied = (intervals: {start: number, end: number}[], start: number, end: number, buffer: number) => {
-      return intervals.some(inv => (start < inv.end + buffer && end > inv.start - buffer));
-    };
 
     const getBusyTeams = () => {
       const busy = new Map<string, {start: number, end: number}[]>();
@@ -431,57 +527,55 @@ export function generateSchedule(teams: Team[], config: ScheduleConfig, initialM
           let checkPos = baseTime.getTime();
           const matchLen = config.gameDuration * 60000;
           
-          // STRICT LIMIT: No filler after finalEndTime
-          const endLim = Math.min(groupCutoff, finalEndTime.getTime()) - matchLen;
-
-          while (checkPos <= endLim) {
+          while (checkPos <= finalEndTime.getTime() - matchLen) {
             if (checkPos >= generalBreakStart.getTime() && checkPos < generalBreakEnd.getTime()) { checkPos = generalBreakEnd.getTime(); continue; }
             const pEnd = checkPos + matchLen;
             if (checkPos < generalBreakStart.getTime() && pEnd > generalBreakStart.getTime()) { checkPos = generalBreakEnd.getTime(); continue; }
 
-            if (!isOccupied(busyC, checkPos, pEnd, config.breakDuration)) {
-              // Look for teams
+            const courtBusy = busyC.some(inv => checkPos < inv.end + 2 * 60000 && pEnd > inv.start - 2 * 60000);
+            if (!courtBusy) {
               const categoriesSorted = seededShuffle([...catsInTeams], runSeed + checkPos);
               for (const cat of categoriesSorted) {
-                const isCatAllowed = cc.allowedCategories.length === 0 || cc.allowedCategories.includes(cat);
-                if (!isCatAllowed) continue;
-                if (cc.allowedCategories.length === 0) {
-                  const catNeedsSmall = isSmallBasketCat(cat);
-                  if (catNeedsSmall && cc.rimType !== 'low') continue;
-                  if (!catNeedsSmall && cc.rimType === 'low') continue;
-                }
+                const catNeedsSmall = isSmallBasketCat(cat);
+                const courtIsSmall = cc.rimType === 'low';
+                
+                // Rim type MUST match for the category to play on this court
+                if (catNeedsSmall !== courtIsSmall) continue;
+
+                const isCatAssigned = cc.allowedCategories.length === 0 || cc.allowedCategories.includes(cat);
+                
+                // For "Extra Filler" (Fase Relleno), we respect assignments.
+                // For "Min Games", we relax assignments and allow playing on any compatible court.
+                if (!onlyLowGames && !isCatAssigned) continue;
 
                 const catTeams = teams.filter(t => t.category === cat);
-                let cand1 = catTeams.filter(t => !isOccupied(busyT.get(t.name) || [], checkPos, pEnd, config.breakDuration));
+                let cand1 = catTeams.filter(t => {
+                   const tBusy = (busyT.get(t.name) || []).some(inv => checkPos < inv.end + 2 * 60000 && pEnd > inv.start - 2 * 60000);
+                   return !tBusy;
+                });
                 if (onlyLowGames) cand1 = cand1.filter(t => (teamGamesCount.get(t.name) || 0) < config.minGamesPerTeam);
                 if (cand1.length < 1) continue;
                 
                 cand1.sort((a, b) => (teamGamesCount.get(a.name) || 0) - (teamGamesCount.get(b.name) || 0));
                 const t1 = cand1[0];
-                let cand2 = catTeams.filter(t => t.name !== t1.name && !isOccupied(busyT.get(t.name) || [], checkPos, pEnd, config.breakDuration));
+                let cand2 = catTeams.filter(t => t.name !== t1.name && !((busyT.get(t.name) || []).some(inv => checkPos < inv.end + 2 * 60000 && pEnd > inv.start - 2 * 60000)));
                 if (cand2.length === 0) continue;
                 cand2.sort((a, b) => (teamGamesCount.get(a.name) || 0) - (teamGamesCount.get(b.name) || 0));
                 const t2 = cand2[0];
 
                 matches.push({
                   id: `${onlyLowGames ? 'MIN' : 'FILL'}-${cat.replace(/[^A-Z0-9]/gi, '')}-${matches.length + 1}`,
-                  category: cat,
-                  phase: onlyLowGames ? 'Min. Partidos' : 'Fase Relleno',
+                  category: cat, phase: onlyLowGames ? 'Min. Partidos' : 'Fase Relleno',
                   team1: t1.name, team2: t2.name,
-                  startTime: new Date(checkPos), endTime: new Date(pEnd),
-                  court: cc.id
+                  startTime: new Date(checkPos), endTime: new Date(pEnd), court: cc.id
                 });
-                if (onlyLowGames) categoryGroupFinishedAt.set(cat, Math.max(categoryGroupFinishedAt.get(cat) || 0, pEnd));
                 teamGamesCount.set(t1.name, (teamGamesCount.get(t1.name) || 0) + 1);
                 teamGamesCount.set(t2.name, (teamGamesCount.get(t2.name) || 0) + 1);
-                teamNextAvailable.set(t1.name, Math.max(teamNextAvailable.get(t1.name) || 0, pEnd + config.breakDuration * 60000));
-                teamNextAvailable.set(t2.name, Math.max(teamNextAvailable.get(t2.name) || 0, pEnd + config.breakDuration * 60000));
-                const c = courts.find(ct => ct.id === cc.id); if (c) c.nextAvailable = Math.max(c.nextAvailable, pEnd + config.breakDuration * 60000);
                 found = true; break;
               }
             }
             if (found) break;
-            checkPos += 5 * 60000;
+            checkPos += 15 * 60000;
           }
           if (!found) break;
         }
@@ -489,121 +583,6 @@ export function generateSchedule(teams: Team[], config: ScheduleConfig, initialM
     };
 
     runFillerPass(true); // Schedule Min Games
-
-    // PASS 3: Playoff Phase (Priority >= 5)
-    const playoffPrios = priorities.filter(p => p >= 5).sort((a, b) => a - b); // 5 (Semis), then 10 (Finals)
-    
-    // Calculate how many rounds we need for each priority tier to establish correct base offsets
-    const prioSizes = new Map<number, number>();
-    playoffPrios.forEach(p => {
-      const matchCount = pendingMatchups.filter(m => m.priority === p).length;
-      // Rough estimate of rounds needed for this priority
-      prioSizes.set(p, Math.ceil(matchCount / courts.length));
-    });
-
-    // We process [5, 10] but to calculate targetEndTime we need to know the stack above us.
-    // Finals (10) stack depth: 0
-    // Semis (5) stack depth: Finals rounds
-    const getBaseTierDistance = (p: number) => {
-      if (p === 10) return 0;
-      if (p === 5) return prioSizes.get(10) || 1;
-      return (prioSizes.get(10) || 1) + (prioSizes.get(5) || 1);
-    };
-
-    let totalPlayoffsScheduledInTier = 0;
-    const categoryPlayoffSlotsUsedInTier = new Map<string, number>();
-
-    for (const prio of playoffPrios) {
-      let phaseMatchups = seededShuffle(pendingMatchups.filter(m => m.priority === prio), runSeed + prio);
-      
-      // Reset intra-tier sequence for each priority level
-      totalPlayoffsScheduledInTier = 0;
-      categoryPlayoffSlotsUsedInTier.clear();
-
-      const baseDistance = getBaseTierDistance(prio);
-
-      while (phaseMatchups.length > 0 && safetyCounter < MAX_ITERATIONS) {
-        safetyCounter++;
-        let matchFound = false;
-
-        // Sort matchups within tier to prioritize those with earlier readiness
-        phaseMatchups.sort((m1, m2) => {
-          const r1 = Math.max(categoryGroupFinishedAt.get(m1.category) || 0, teamNextAvailable.get(m1.a) || 0, teamNextAvailable.get(m1.b) || 0);
-          const r2 = Math.max(categoryGroupFinishedAt.get(m2.category) || 0, teamNextAvailable.get(m2.a) || 0, teamNextAvailable.get(m2.b) || 0);
-          return r1 - r2;
-        });
-
-        for (let i = 0; i < phaseMatchups.length; i++) {
-          const m = phaseMatchups[i];
-          const groupEnd = categoryGroupFinishedAt.get(m.category) || 0;
-          const minReady = groupEnd + 2 * 60000; // Small buffer after groups
-          
-          const t1Free = teamNextAvailable.get(m.a) || 0;
-          const t2Free = teamNextAvailable.get(m.b) || 0;
-          const teamsReady = Math.max(t1Free, t2Free);
-          
-          const candidates = courts.filter(c => {
-            const isCatAllowed = c.allowedCategories.length === 0 || c.allowedCategories.includes(m.category);
-            if (!isCatAllowed) return false;
-            const catNeedsSmall = isSmallBasketCat(m.category);
-            if (c.allowedCategories.length === 0) {
-              if (catNeedsSmall && !c.isSmallBasket) return false;
-              if (!catNeedsSmall && c.isSmallBasket) return false;
-            }
-            return true;
-          });
-
-          if (candidates.length === 0) continue;
-
-          const bestCourt = candidates.sort((a, b) => a.nextAvailable - b.nextAvailable)[0];
-
-          // Calculate offset within this tier
-          const catSeq = Math.floor((categoryPlayoffSlotsUsedInTier.get(m.category) || 0) / candidates.length);
-          const globalSeq = Math.floor(totalPlayoffsScheduledInTier / courts.length);
-          
-          const totalDistance = baseDistance + Math.max(catSeq, globalSeq);
-          
-          // targetStart aligned to grid (Distance slots before finalEndTime)
-          const targetStart = finalEndTime.getTime() - (totalDistance + 1) * slotSize;
-          
-          const minPossibleStart = Math.max(minReady, teamsReady, bestCourt.nextAvailable);
-          
-          // Anchor: use targetStart, but respect physical limits
-          let finalStart = Math.max(targetStart, minPossibleStart);
-          
-          // HARD CLAMP: The user wants it to END AT finalEndTime
-          if (finalStart + config.gameDuration * 60000 > finalEndTime.getTime()) {
-             finalStart = finalEndTime.getTime() - config.gameDuration * 60000;
-          }
-          
-          const finalEnd = finalStart + config.gameDuration * 60000;
-
-          phaseMatchups.splice(i, 1);
-          matches.push({
-            id: `${m.category.replace(/[^A-Z0-9]/gi, '')}-${matches.length + 1}`,
-            category: m.category, phase: m.phase,
-            team1: m.a, team2: m.b,
-            startTime: new Date(finalStart), endTime: new Date(finalEnd), court: bestCourt.id
-          });
-
-          categoryPlayoffSlotsUsedInTier.set(m.category, (categoryPlayoffSlotsUsedInTier.get(m.category) || 0) + 1);
-          totalPlayoffsScheduledInTier++;
-
-          const tna = finalEnd + config.breakDuration * 60000;
-          bestCourt.nextAvailable = tna;
-          teamNextAvailable.set(m.a, tna);
-          teamNextAvailable.set(m.b, tna);
-          
-          if (m.phase.startsWith('Semifinal')) {
-            teamNextAvailable.set(`Ganador ${m.phase}`, tna);
-          }
-          
-          matchFound = true;
-          break;
-        }
-        if (!matchFound) break;
-      }
-    }
 
     // PASS 4: Extra Filler (Fase Relleno)
     if (config.useFillPhase) {

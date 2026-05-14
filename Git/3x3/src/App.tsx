@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Trophy, 
   Settings, 
@@ -33,7 +33,8 @@ import {
   Unlock,
   Circle,
   CheckCircle2,
-  Info
+  Info,
+  Eraser
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { generateSchedule, parseTeams, Team, Match, ScheduleConfig, CourtConfig, formatTime } from './lib/scheduler';
@@ -148,7 +149,8 @@ export default function App() {
     minGamesPerTeam: 3,
     generalBreakTime: "11:30",
     generalBreakDuration: 15,
-    useFillPhase: false
+    useFillPhase: false,
+    playoffThreshold: 6
   });
   const [matches, setMatches] = useState<Match[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -292,6 +294,7 @@ export default function App() {
       generalBreakTime: "11:30",
       generalBreakDuration: 15,
       useFillPhase: false,
+      playoffThreshold: 6,
       ...t.data.config
     };
 
@@ -300,6 +303,7 @@ export default function App() {
     newConfig.endTime = newConfig.endTime || "14:30";
     newConfig.generalBreakTime = newConfig.generalBreakTime || "11:30";
     newConfig.minGamesPerTeam = newConfig.minGamesPerTeam || 3;
+    newConfig.playoffThreshold = newConfig.playoffThreshold || 6;
     newConfig.useFillPhase = newConfig.useFillPhase ?? false;
 
     setConfig(newConfig);
@@ -422,7 +426,23 @@ export default function App() {
   const [filterTeams, setFilterTeams] = useState<string[]>([]);
   const [showTeamFilter, setShowTeamFilter] = useState(false);
 
-  const teamNames = useMemo(() => Array.from(new Set(teams.map(t => t.name))).sort(), [teams]);
+  const teamNames = useMemo(() => {
+    let filteredTeams = teams;
+    if (filterCats.length > 0) {
+      filteredTeams = teams.filter(t => filterCats.includes(t.category));
+    }
+    // Convert to objects with name and category to show in dropdown
+    const uniqueTeams = Array.from(new Set(filteredTeams.map(t => t.name))).map(name => {
+      return filteredTeams.find(t => t.name === name);
+    }).filter(Boolean);
+
+    // Sort by category first, then by name
+    return (uniqueTeams as any[]).sort((a, b) => {
+      const catCompare = (a.category || '').localeCompare(b.category || '');
+      if (catCompare !== 0) return catCompare;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [teams, filterCats]);
 
   const handleMatchDrop = (matchId: string, targetCourt: number, targetTimeStr: string) => {
     if (isLocked || hasScores) return;
@@ -476,8 +496,8 @@ export default function App() {
 
   const handleGenerate = () => {
     try {
-      if (teams.length === 0) {
-        setError("Introduce equipos válidos.");
+      if (teams.length < 2) {
+        setError("Se necesitan al menos 2 equipos para generar el calendario.");
         return;
       }
 
@@ -485,12 +505,14 @@ export default function App() {
       const generated = generateSchedule(teams, config);
       setMatches(generated);
       setIsLocked(false);
-    } catch (e) {
-      if (e instanceof Error) {
-        setError(e.message);
-      } else {
-        setError("Error al generar el calendario.");
-      }
+      // Reset filters so we see everything new
+      setFilterCats([]);
+      setFilterCourt('all');
+      setFilterTeams([]);
+    } catch (e: any) {
+      console.error(e);
+      const msg = e instanceof Error ? e.message : "Error desconocido";
+      setError("Error de configuración: " + msg + ". Prueba a ampliar el horario, añadir más pistas o reducir la duración de los partidos.");
     }
   };
 
@@ -700,7 +722,10 @@ export default function App() {
             // Verificar si TODOS los partidos de grupo de esta categoría han finalizado
             const groupMatches = matches.filter(gm => 
               gm.category === m.category && 
-              gm.phase.includes('Grupo')
+              (gm.phase.toLowerCase().includes('grupo') || 
+               gm.phase.toLowerCase().includes('ida') || 
+               gm.phase.toLowerCase().includes('vuelta') ||
+               gm.phase.toLowerCase().includes('liga'))
             );
             const allFinished = groupMatches.length > 0 && groupMatches.every(gm => 
               typeof gm.score1 === 'number' && !isNaN(gm.score1) && 
@@ -724,6 +749,19 @@ export default function App() {
               semiMatch.score1 !== semiMatch.score2) {
             const winnerRaw = semiMatch.score1 > semiMatch.score2 ? semiMatch.team1 : semiMatch.team2;
             return resolveName(winnerRaw); // Recursivo para manejar si la semi tenía un placeholder
+          }
+        }
+
+        // Resolución de Perdedores de Semifinales (3º y 4º puesto)
+        if (name.includes('Perdedor Semifinal') || name.includes('Perdedor S')) {
+          const semiId = (name.includes('Semifinal 1') || name.includes('S1')) ? 'Semifinal 1' : 'Semifinal 2';
+          const semiMatch = matches.find(sm => sm.category === m.category && sm.phase === semiId);
+          if (semiMatch && 
+              typeof semiMatch.score1 === 'number' && !isNaN(semiMatch.score1) && 
+              typeof semiMatch.score2 === 'number' && !isNaN(semiMatch.score2) &&
+              semiMatch.score1 !== semiMatch.score2) {
+            const loserRaw = semiMatch.score1 < semiMatch.score2 ? semiMatch.team1 : semiMatch.team2;
+            return resolveName(loserRaw);
           }
         }
 
@@ -928,20 +966,26 @@ export default function App() {
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Juego (m)</label>
                   <input 
                     type="number" 
-                    value={config.gameDuration ?? 10} 
+                    value={config.gameDuration ?? ''} 
                     disabled={isLocked || hasScores}
-                    onChange={e => setConfig(c => ({...c, gameDuration: +e.target.value}))} 
-                    className={`w-full bg-transparent font-mono font-black text-lg outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
+                    onChange={e => {
+                      const val = e.target.value;
+                      setConfig(c => ({...c, gameDuration: val === '' ? undefined as any : Math.max(1, Number(val))}));
+                    }} 
+                    className={`w-full bg-transparent font-mono font-black text-lg outline-none appearance-auto ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
                 </div>
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Descanso (m)</label>
                   <input 
                     type="number" 
-                    value={config.breakDuration ?? 5} 
+                    value={config.breakDuration ?? ''} 
                     disabled={isLocked || hasScores}
-                    onChange={e => setConfig(c => ({...c, breakDuration: +e.target.value}))} 
-                    className={`w-full bg-transparent font-mono font-black text-lg outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
+                    onChange={e => {
+                      const val = e.target.value;
+                      setConfig(c => ({...c, breakDuration: val === '' ? undefined as any : Math.max(0, Number(val))}));
+                    }} 
+                    className={`w-full bg-transparent font-mono font-black text-lg outline-none appearance-auto ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
                 </div>
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
@@ -978,10 +1022,26 @@ export default function App() {
                   <label className="text-[9px] font-black text-[#e94560] uppercase block mb-1">Mín. Partidos</label>
                   <input 
                     type="number" 
-                    value={config.minGamesPerTeam ?? 3} 
+                    value={config.minGamesPerTeam ?? ''} 
                     disabled={isLocked || hasScores}
-                    onChange={e => setConfig(c => ({...c, minGamesPerTeam: Math.max(1, +e.target.value)}))} 
-                    className={`w-full bg-transparent font-mono font-black text-lg outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
+                    onChange={e => {
+                      const val = e.target.value;
+                      setConfig(c => ({...c, minGamesPerTeam: val === '' ? undefined as any : Math.max(1, Number(val))}));
+                    }} 
+                    className={`w-full bg-transparent font-mono font-black text-lg outline-none appearance-auto ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
+                  />
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <label className="text-[9px] font-black text-[#e94560] uppercase block mb-1">Umbral Playoff</label>
+                  <input 
+                    type="number" 
+                    value={config.playoffThreshold ?? ''} 
+                    disabled={isLocked || hasScores}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setConfig(c => ({...c, playoffThreshold: val === '' ? undefined as any : Math.max(2, Number(val))}));
+                    }} 
+                    className={`w-full bg-transparent font-mono font-black text-lg outline-none appearance-auto ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
                 </div>
                 <div className="bg-slate-100 p-3 rounded-xl border border-slate-200 col-span-2 flex items-center justify-between">
@@ -1250,31 +1310,43 @@ export default function App() {
                                 >
                                   Limpiar
                                 </button>
-                              </div>
-                              <div className="px-1">
-                                {teamNames.map(name => {
-                                  const isSelected = filterTeams.includes(name);
-                                  return (
-                                    <button
-                                      key={name}
-                                      onClick={() => {
-                                        setFilterTeams(prev => 
-                                          prev.includes(name) 
-                                            ? prev.filter(n => n !== name) 
-                                            : [...prev, name]
-                                        );
-                                      }}
-                                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left text-[10px] md:text-[11px] font-bold transition-all ${isSelected ? 'bg-[#e94560]/10 text-[#e94560]' : 'text-slate-600 hover:bg-slate-50'}`}
-                                    >
-                                      {name}
-                                      {isSelected ? (
-                                        <CheckCircle2 className="w-3.5 h-3.5 text-[#e94560]" />
-                                      ) : (
-                                        <Circle className="w-3.5 h-3.5 text-slate-200" />
-                                      )}
-                                    </button>
-                                  );
-                                })}
+                                </div>
+                                <div className="px-1">
+                                  {teamNames.map((team, idx) => {
+                                    if (!team) return null;
+                                    const name = team.name;
+                                    const isSelected = filterTeams.includes(name);
+                                    const showCategoryHeader = (filterCats.length !== 1) && (idx === 0 || team.category !== teamNames[idx - 1]?.category);
+                                    
+                                    return (
+                                      <div key={`${name}-${team.category}`}>
+                                        {showCategoryHeader && (
+                                          <div className="px-3 py-1.5 mt-2 mb-1 bg-slate-100/50 text-[8px] font-black uppercase text-slate-500 rounded-sm border-l-2 border-slate-300">
+                                            {team.category}
+                                          </div>
+                                        )}
+                                        <button
+                                          onClick={() => {
+                                            setFilterTeams(prev => 
+                                              prev.includes(name) 
+                                                ? prev.filter(n => n !== name) 
+                                                : [...prev, name]
+                                            );
+                                          }}
+                                          className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left transition-all ${isSelected ? 'bg-[#e94560]/10 text-[#e94560]' : 'text-slate-600 hover:bg-slate-50'}`}
+                                        >
+                                          <div className="flex flex-col">
+                                            <span className="text-[10px] md:text-[11px] font-bold leading-tight">{name}</span>
+                                          </div>
+                                          {isSelected ? (
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-[#e94560] shrink-0 ml-2" />
+                                          ) : (
+                                            <Circle className="w-3.5 h-3.5 text-slate-200 shrink-0 ml-2" />
+                                          )}
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
                               </div>
                             </motion.div>
                           </>
@@ -1324,8 +1396,8 @@ export default function App() {
                                        const match = slotMatches.find(m => m.court === cc.id);
                                        const isHighlighted = filterTeams.length > 0 ? (filterTeams.includes(match?.team1 || '') || filterTeams.includes(match?.team2 || '')) : false;
                                        const isOtherHighlighted = filterTeams.length > 0 && !isHighlighted;
-                                       const isSemi = match?.phase.includes('Semifinal');
-                                       const isFinal = match?.phase === 'Final' || match?.phase === 'Final 3x3';
+                                       const isSemi = match?.phase.toLowerCase().includes('semifinal');
+                                       const isFinal = !isSemi && (match?.phase.toLowerCase().includes('final') || match?.phase === '3er y 4º Puesto');
                                        const isPlayoff = isSemi || isFinal;
                                        return (
                                          <div 
@@ -1687,13 +1759,19 @@ function ClassificationTable({ teams, filterTeams = [] }: { teams: any[], filter
 }
 
 function PlayoffSection({ category, matches, onUpdateScore, isLocked, filterTeams = [] }: { category: string, matches: Match[], onUpdateScore: (id: string, s1: number | undefined, s2: number | undefined) => void, isLocked: boolean, filterTeams?: string[] }) {
-  const playoffMatches = matches.filter(m => m.category === category && (m.phase.includes('Semifinal') || m.phase === 'Final'));
+  const playoffMatches = matches.filter(m => 
+    m.category === category && 
+    (m.phase.toLowerCase().includes('semifinal') || 
+     m.phase.toLowerCase().includes('final') || 
+     m.phase === '3er y 4º Puesto')
+  );
   
   if (playoffMatches.length === 0) return null;
 
   const s1 = playoffMatches.find(m => m.phase === 'Semifinal 1');
   const s2 = playoffMatches.find(m => m.phase === 'Semifinal 2');
   const final = playoffMatches.find(m => m.phase === 'Final');
+  const consolation = playoffMatches.find(m => m.phase === '3er y 4º Puesto');
 
   return (
     <div className="mt-12 bg-[#1a1a2e] rounded-3xl p-10 overflow-hidden relative border border-white/5 shadow-2xl">
@@ -1724,10 +1802,17 @@ function PlayoffSection({ category, matches, onUpdateScore, isLocked, filterTeam
           </div>
         )}
 
-        {/* Final Column */}
-        {final && (
-          <div className="flex flex-col justify-center w-80">
-            <MatchNode match={final} label="GRAN FINAL" isMain onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />
+        {/* Finals Column (Main & 3rd/4th) */}
+        {(final || consolation) && (
+          <div className="flex flex-col justify-center gap-10 w-80">
+            {final && (
+              <MatchNode match={final} label="GRAN FINAL" isMain onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />
+            )}
+            {consolation && (
+              <div className="opacity-90 scale-95 border-t border-white/5 pt-4">
+                <MatchNode match={consolation} label="3º y 4º PUESTO" onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -2011,7 +2096,7 @@ function TeamsManagementView({
   appCategories: string[], 
   setAppCategories: (cats: string[]) => void,
   teamsByCategory: Record<string, string[]>,
-  setTeamsByCategory: (teams: Record<string, string[]>) => void,
+  setTeamsByCategory: React.Dispatch<React.SetStateAction<Record<string, string[]>>>,
   initialCategories: string[],
   onRenameTeam: (cat: string, oldName: string, newName: string) => void,
   isLocked: boolean
@@ -2035,31 +2120,49 @@ function TeamsManagementView({
       return;
     }
     setAppCategories(appCategories.filter(c => c !== cat));
-    const newTeams = { ...teamsByCategory };
-    delete newTeams[cat];
-    setTeamsByCategory(newTeams);
+    setTeamsByCategory(prev => {
+      const next = { ...prev };
+      delete next[cat];
+      return next;
+    });
   };
 
   const addTeamToCategory = (cat: string) => {
     const teamName = newTeamInputs[cat];
     if (teamName) {
-      const currentTeams = teamsByCategory[cat] || [];
-      if (!currentTeams.includes(teamName)) {
-        setTeamsByCategory({
-          ...teamsByCategory,
-          [cat]: [...currentTeams, teamName]
-        });
-      }
+      setTeamsByCategory(prev => {
+        const currentTeams = prev[cat] || [];
+        if (!currentTeams.includes(teamName)) {
+          return {
+            ...prev,
+            [cat]: [...currentTeams, teamName]
+          };
+        }
+        return prev;
+      });
       setNewTeamInputs({ ...newTeamInputs, [cat]: '' });
     }
   };
 
   const removeTeamFromCategory = (cat: string, teamName: string) => {
-    const currentTeams = teamsByCategory[cat] || [];
-    setTeamsByCategory({
-      ...teamsByCategory,
-      [cat]: currentTeams.filter(t => t !== teamName)
+    setTeamsByCategory(prev => {
+      const currentTeams = prev[cat] || [];
+      return {
+        ...prev,
+        [cat]: currentTeams.filter(t => t !== teamName)
+      };
     });
+  };
+
+  const [confirmClear, setConfirmClear] = useState<string | null>(null);
+
+  const clearTeamsInCategory = (cat: string) => {
+    setTeamsByCategory((prev: Record<string, string[]>) => {
+      const next = { ...prev };
+      next[cat] = [];
+      return next;
+    });
+    setConfirmClear(null);
   };
 
   const totalTeams = Object.values(teamsByCategory).reduce((acc, teams) => acc + teams.length, 0);
@@ -2142,8 +2245,41 @@ function TeamsManagementView({
                     {teamsByCategory[cat]?.length || 0} Equipos
                   </p>
                 </div>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${(teamsByCategory[cat] || []).length > 0 ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-300'}`}>
-                  <Users className="w-5 h-5" />
+                <div className="flex items-center gap-2">
+                  {(teamsByCategory[cat] || []).length > 0 && !isLocked && (
+                    <div className="relative group/eraser">
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (confirmClear === cat) {
+                            console.log("LOG: Borrando categoría confirmada:", cat);
+                            clearTeamsInCategory(cat);
+                          } else {
+                            console.log("LOG: Solicitando confirmación para borrar:", cat);
+                            setConfirmClear(cat);
+                            setTimeout(() => setConfirmClear(prev => prev === cat ? null : prev), 5000);
+                          }
+                        }}
+                        className={`group relative flex items-center justify-center p-2 rounded-xl transition-all duration-300 ${
+                          confirmClear === cat 
+                            ? 'bg-red-500 text-white shadow-xl scale-105' 
+                            : 'text-slate-400 hover:text-red-500 hover:bg-red-50'
+                        }`}
+                        style={{ minWidth: confirmClear === cat ? '100px' : '40px' }}
+                        title={confirmClear === cat ? "Click de nuevo para borrar" : "Borrar todos los equipos"}
+                      >
+                        <Eraser className={`w-5 h-5 transition-transform duration-300 ${confirmClear === cat ? 'scale-110 mr-1' : 'group-hover:rotate-12'}`} />
+                        {confirmClear === cat && (
+                          <span className="text-[10px] font-black uppercase tracking-wider animate-pulse">¿BORRAR?</span>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${(teamsByCategory[cat] || []).length > 0 ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-300'}`}>
+                    <Users className="w-5 h-5" />
+                  </div>
                 </div>
               </div>
               
