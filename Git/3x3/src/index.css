@@ -107,9 +107,9 @@ body {
 
   /* Time Column - Guaranteed Visibility */
   .print-time-column, .print-time-slot {
-    width: 60px !important;
-    min-width: 60px !important;
-    flex-basis: 60px !important;
+    width: 75px !important;
+    min-width: 75px !important;
+    flex-basis: 75px !important;
     flex-grow: 0 !important;
     flex-shrink: 0 !important;
     border-right: 1px solid #cbd5e1 !important;
@@ -144,12 +144,32 @@ body {
     flex-grow: 1 !important;
     flex-shrink: 1 !important;
     flex-basis: 0% !important;
-    min-width: 50px !important;
+    min-width: 70px !important;
     border-right: 1px solid #e2e8f0 !important;
     text-align: center !important;
-    padding: 1px !important;
+    padding: 2px !important;
     visibility: visible !important;
     opacity: 1 !important;
+  }
+
+  .print-court-column {
+    font-size: 13pt !important;
+    font-weight: 900 !important;
+    color: #ffffff !important;
+    background-color: #1a1a2e !important;
+    padding: 8px 2px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 45px !important;
+  }
+
+  .print-time-column {
+    font-size: 11pt !important;
+    font-weight: 900 !important;
+    color: #ffffff !important;
+    background-color: #1a1a2e !important;
   }
 
   .min-w-max {
