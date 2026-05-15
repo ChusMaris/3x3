@@ -41,6 +41,7 @@ export interface ScheduleConfig {
   generalBreakDuration: number; // 15
   useFillPhase?: boolean; // Toggle for full calendar filling
   playoffThreshold: number; // Number of teams from which to start playoffs
+  manualGroups?: Record<string, Record<string, string[]>>; // category -> { groupName -> [teamNames] }
 }
 
 export function parseTeams(input: string): Team[] {
@@ -129,8 +130,27 @@ function generateTournamentMatchups(teams: Team[], config: ScheduleConfig): Matc
     }
     else {
       // 7-8 teams: 2 groups (or less if threshold is lower)
-      const groupA = catTeams.slice(0, Math.ceil(n/2));
-      const groupB = catTeams.slice(Math.ceil(n/2));
+      let groupA: Team[] = [];
+      let groupB: Team[] = [];
+
+      const manualGroups = config.manualGroups?.[cat];
+      if (manualGroups && manualGroups['A'] && manualGroups['B']) {
+        // Use manual groups if provided
+        groupA = catTeams.filter(t => manualGroups['A'].includes(t.name));
+        groupB = catTeams.filter(t => manualGroups['B'].includes(t.name));
+        
+        // If some teams were not in manual groups (e.g. newly added), distribute them
+        const assignedTeams = new Set([...manualGroups['A'], ...manualGroups['B']]);
+        const unassigned = catTeams.filter(t => !assignedTeams.has(t.name));
+        unassigned.forEach((t, i) => {
+          if (groupA.length <= groupB.length) groupA.push(t);
+          else groupB.push(t);
+        });
+      } else {
+        // Default split
+        groupA = catTeams.slice(0, Math.ceil(n/2));
+        groupB = catTeams.slice(Math.ceil(n/2));
+      }
 
       [groupA, groupB].forEach((group, gIdx) => {
         const prefix = gIdx === 0 ? 'A' : 'B';

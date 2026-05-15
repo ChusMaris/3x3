@@ -495,6 +495,40 @@ export default function App() {
     });
   };
 
+  const handleMoveTeamBetweenGroups = (cat: string, teamName: string, targetGroup: string) => {
+    setConfig(prev => {
+      const currentManual = prev.manualGroups || {};
+      const catTeams = teams.filter(t => t.category === cat);
+      
+      // Get existing groups or create defaults if they don't exist yet
+      const n = catTeams.length;
+      const defaultA = catTeams.slice(0, Math.ceil(n/2)).map(t => t.name);
+      const defaultB = catTeams.slice(Math.ceil(n/2)).map(t => t.name);
+      
+      const newGroupsState = currentManual[cat] ? { ...currentManual[cat] } : {
+        'A': [...defaultA],
+        'B': [...defaultB]
+      };
+      
+      // Remove from all current groups in this category
+      Object.keys(newGroupsState).forEach(g => {
+        newGroupsState[g] = newGroupsState[g].filter(name => name !== teamName);
+      });
+
+      // Add to target group
+      if (!newGroupsState[targetGroup]) newGroupsState[targetGroup] = [];
+      newGroupsState[targetGroup].push(teamName);
+      
+      return {
+        ...prev,
+        manualGroups: {
+          ...currentManual,
+          [cat]: newGroupsState
+        }
+      };
+    });
+  };
+
   const handleGenerate = () => {
     try {
       if (teams.length < 2) {
@@ -657,11 +691,29 @@ export default function App() {
       const catTeamsBase = teams.filter(t => t.category === cat);
       const allTeamsData = Object.entries(stats[cat]).map(([name, data]) => ({ name, ...data }));
       
-      if (catTeamsBase.length > 6) {
+      const n = catTeamsBase.length;
+      if (n > (config.playoffThreshold || 6)) {
         // Handle 2 groups logic (same as scheduler.ts)
-        const n = catTeamsBase.length;
-        const groupA_Names = catTeamsBase.slice(0, Math.ceil(n/2)).map(t => t.name);
-        const groupB_Names = catTeamsBase.slice(Math.ceil(n/2)).map(t => t.name);
+        let groupA_Names: string[] = [];
+        let groupB_Names: string[] = [];
+
+        const manualGroups = config.manualGroups?.[cat];
+        if (manualGroups && manualGroups['A'] && manualGroups['B']) {
+          groupA_Names = [...manualGroups['A']];
+          groupB_Names = [...manualGroups['B']];
+          
+          // Ensure all current teams are accounted for (in case teams changed but manual groups didn't update yet)
+          const assigned = new Set([...groupA_Names, ...groupB_Names]);
+          catTeamsBase.forEach(t => {
+            if (!assigned.has(t.name)) {
+              if (groupA_Names.length <= groupB_Names.length) groupA_Names.push(t.name);
+              else groupB_Names.push(t.name);
+            }
+          });
+        } else {
+          groupA_Names = catTeamsBase.slice(0, Math.ceil(n/2)).map(t => t.name);
+          groupB_Names = catTeamsBase.slice(Math.ceil(n/2)).map(t => t.name);
+        }
         
         const dataA = allTeamsData.filter(t => groupA_Names.includes(t.name));
         const dataB = allTeamsData.filter(t => groupB_Names.includes(t.name));
@@ -681,7 +733,7 @@ export default function App() {
     });
 
     return result;
-  }, [matches, teams]);
+  }, [matches, teams, config]);
 
   // Derived matches with resolved team names
   const resolvedMatches = useMemo(() => {
@@ -1200,9 +1252,9 @@ export default function App() {
                 <p className="text-sm font-black uppercase tracking-widest">Configura y pulsa "Generar" para ver los cruces</p>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col overflow-hidden relative">
+              <div className="flex-1 flex flex-col relative min-h-0">
                 {/* Unified Header with Toggle and Filters */}
-                <div className="bg-white border-b border-slate-200 p-1 md:p-2.5 flex items-center justify-between gap-2 md:gap-3 shrink-0 px-4 md:px-8 shadow-sm z-[60] overflow-x-auto no-scrollbar short-compact">
+                <div className="bg-white border-b border-slate-200 p-1 md:p-2.5 flex flex-wrap items-center justify-between gap-2 md:gap-3 shrink-0 px-4 md:px-8 shadow-sm z-[100] short-compact">
                     {(viewMode === 'grid' || viewMode === 'calendar') && (
                       <div className="flex bg-slate-100 p-0.5 md:p-1 rounded-lg md:rounded-xl shrink-0">
                         <button 
@@ -1352,16 +1404,59 @@ export default function App() {
                             <h2 className="text-xl md:text-2xl font-black italic uppercase tracking-tighter text-[#1a1a2e]">{cat}</h2>
                             
                             {catData?.groups ? (
-                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
-                                {Object.entries(catData.groups as Record<string, any[]>).map(([letter, groupTeams]) => (
-                                  <div key={letter} className="space-y-2 md:space-y-4">
-                                    <h3 className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.2em] px-2 md:px-4 text-slate-400">Grupo {letter}</h3>
-                                    <div className="rounded-xl md:rounded-2xl border border-slate-200 overflow-hidden shadow-sm overflow-x-auto no-scrollbar">
-                                      <ClassificationTable teams={groupTeams} filterTeams={filterTeams} />
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
+                              <>
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
+                                   {Object.entries(catData.groups as Record<string, any[]>).map(([letter, groupTeams]) => (
+                                     <div 
+                                       key={letter} 
+                                       className="space-y-2 md:space-y-4"
+                                     onDragOver={(e) => {
+                                        e.preventDefault();
+                                        e.dataTransfer.dropEffect = "move";
+                                        const el = e.currentTarget as HTMLElement;
+                                        el.classList.add('bg-[#e94560]/10', 'ring-2', 'ring-[#e94560]', 'ring-dashed');
+                                     }}
+                                     onDragEnter={(e) => { 
+                                        e.preventDefault();
+                                     }}
+                                     onDragLeave={(e) => {
+                                        const el = e.currentTarget as HTMLElement;
+                                        if (!el.contains(e.relatedTarget as Node)) {
+                                          el.classList.remove('bg-[#e94560]/10', 'ring-2', 'ring-[#e94560]', 'ring-dashed');
+                                        }
+                                     }}
+                                     onDrop={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const el = e.currentTarget as HTMLElement;
+                                        el.classList.remove('bg-[#e94560]/10', 'ring-2', 'ring-[#e94560]', 'ring-dashed');
+                                        const dataStr = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text");
+                                        if (dataStr && dataStr.includes('|')) {
+                                          const parts = dataStr.split('|');
+                                          if (parts.length >= 2) {
+                                            const teamName = parts[0];
+                                            const fromCat = parts[1];
+                                            if (teamName && fromCat === cat) {
+                                              handleMoveTeamBetweenGroups(cat, teamName, letter);
+                                            }
+                                          }
+                                        }
+                                     }}
+                                     >
+                                       <h3 className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.2em] px-2 md:px-4">Grupo {letter}</h3>
+                                       <div className="rounded-xl md:rounded-2xl border border-slate-200 overflow-hidden shadow-sm overflow-x-auto no-scrollbar bg-white transition-all ring-inset hover:ring-1 hover:ring-slate-300">
+                                         <ClassificationTable teams={groupTeams} filterTeams={filterTeams} canDragTeams={true} cat={cat} />
+                                       </div>
+                                     </div>
+                                   ))}
+                                </div>
+                                <div className="mt-4 flex items-center gap-2 bg-blue-50 border border-blue-100 p-3 rounded-lg no-print">
+                                  <Info className="w-4 h-4 text-blue-500" />
+                                  <p className="text-[10px] md:text-xs font-bold text-blue-600 italic">
+                                    Puedes arrastrar equipos entre los grupos A y B. Recuerda pulsar <span className="font-black underline text-[#e94560]">"GENERAR TORNEO"</span> para aplicar los cambios al calendario.
+                                  </p>
+                                </div>
+                              </>
                             ) : (
                               <div className="rounded-xl md:rounded-2xl border border-slate-200 overflow-hidden shadow-sm overflow-x-auto no-scrollbar">
                                 <ClassificationTable teams={catData?.all || []} filterTeams={filterTeams} />
@@ -1679,7 +1774,7 @@ export default function App() {
   );
 }
 
-function ClassificationTable({ teams, filterTeams = [] }: { teams: any[], filterTeams?: string[] }) {
+function ClassificationTable({ teams, filterTeams = [], canDragTeams = false, cat = '' }: { teams: any[], filterTeams?: string[], canDragTeams?: boolean, cat?: string }) {
   return (
     <table className="w-full text-left">
       <thead className="bg-[#1a1a2e] text-white text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em]">
@@ -1698,7 +1793,23 @@ function ClassificationTable({ teams, filterTeams = [] }: { teams: any[], filter
         {teams.map((t, idx) => {
           const isHighlighted = filterTeams.includes(t.name);
           return (
-            <tr key={t.name} className={`hover:bg-slate-50 transition-colors ${idx === 0 ? 'bg-amber-50/50' : ''} ${isHighlighted ? 'bg-[#e94560]/10 ring-1 ring-[#e94560] relative z-10' : ''}`}>
+            <tr 
+              key={t.name} 
+              draggable={canDragTeams}
+              onDragStart={(e) => {
+                if (canDragTeams) {
+                  const val = `${t.name}|${cat}`;
+                  e.dataTransfer.setData("text/plain", val);
+                  e.dataTransfer.setData("text", val);
+                  e.dataTransfer.effectAllowed = "move";
+                  (e.currentTarget as HTMLElement).style.opacity = '0.4';
+                }
+              }}
+              onDragEnd={(e) => {
+                (e.currentTarget as HTMLElement).style.opacity = '1';
+              }}
+              className={`hover:bg-slate-50 transition-all ${idx === 0 ? 'bg-amber-50/50' : ''} ${isHighlighted ? 'bg-[#e94560]/10 ring-1 ring-[#e94560] relative z-10' : ''} ${canDragTeams ? 'cursor-grab active:cursor-grabbing hover:bg-slate-100/50' : ''}`}
+            >
               <td className="px-3 md:px-6 py-2.5 md:py-4 flex items-center gap-1.5 md:gap-3">
                 <span className={`w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded-full text-[9px] md:text-[10px] font-black ${idx === 0 ? 'bg-amber-400 text-white shadow-md' : isHighlighted ? 'bg-[#e94560] text-white' : 'bg-slate-100 text-slate-400'}`}>
                   {idx + 1}
