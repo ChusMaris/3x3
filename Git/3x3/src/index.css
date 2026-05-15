@@ -31,6 +31,184 @@ body {
   @apply bg-slate-300;
 }
 
+@media print {
+  @page {
+    size: portrait;
+    margin: 10mm 8mm !important;
+  }
+  
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    padding: 0 !important;
+  }
+  
+  .no-print,
+  button,
+  header,
+  aside,
+  nav,
+  .short-hidden,
+  [class*="fixed"],
+  [class*="absolute"]:not([class*="rounded-lg"]),
+  .shadow-2xl,
+  .print-pause-row,
+  div[class*="bg-slate-400/10"] {
+    display: none !important;
+  }
+
+  .print-only {
+    display: flex !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+    padding-bottom: 4mm !important;
+    margin-bottom: 4mm !important;
+    width: 100% !important;
+  }
+
+  .print-only span {
+    font-size: 11pt !important;
+  }
+
+  h2.print\:text-lg {
+    font-size: 18pt !important;
+    color: #000 !important;
+    margin-bottom: 2mm !important;
+  }
+
+  main, .flex-1, #root {
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Professional Print Styles - Scoped to Print */
+  #printable-content {
+    width: auto !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible !important;
+    position: relative !important;
+  }
+
+  /* Force background colors for print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Reset sticky positions */
+  .sticky, [class*="sticky"] {
+    position: static !important;
+    box-shadow: none !important;
+    background-color: inherit !important;
+  }
+
+  /* Time Column - Guaranteed Visibility */
+  .print-time-column, .print-time-slot {
+    width: 60px !important;
+    min-width: 60px !important;
+    flex-basis: 60px !important;
+    flex-grow: 0 !important;
+    flex-shrink: 0 !important;
+    border-right: 1px solid #cbd5e1 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background-color: #f8fafc !important;
+    overflow: visible !important;
+    color: #000000 !important;
+  }
+
+  .print-time-slot span, 
+  .print-time-text {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: #000000 !important;
+    font-weight: 900 !important;
+    font-size: 11pt !important;
+    text-align: center !important;
+    width: 100% !important;
+    position: relative !important;
+    z-index: 100 !important;
+  }
+
+  /* Court Column - Guaranteed Visibility */
+  .print-court-column, .print-court-slot {
+    width: 0 !important;
+    flex-grow: 1 !important;
+    flex-shrink: 1 !important;
+    flex-basis: 0% !important;
+    min-width: 50px !important;
+    border-right: 1px solid #e2e8f0 !important;
+    text-align: center !important;
+    padding: 1px !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  .min-w-max {
+    min-width: 100% !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: visible !important;
+  }
+
+  .flex.border-b {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    min-height: unset !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Hide the config cards and setup sections */
+  .grid.grid-cols-2.sm\:grid-cols-3.lg\:grid-cols-6,
+  [class*="bg-slate-100"].p-4.rounded-2xl {
+    display: none !important;
+  }
+
+  /* Match Cards - Preserve original colors but make them look professional in print */
+  [class*="rounded-lg"][class*="border-l-4"] {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 2px !important;
+    border: 1px solid #e2e8f0 !important;
+    border-left-width: 5px !important;
+    margin: 1px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    break-inside: avoid;
+    visibility: visible !important;
+    opacity: 1 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Typography */
+  .text-\[5px\], .text-\[6px\], .text-\[7px\], .text-\[8px\], .text-\[9px\] {
+    font-size: 9pt !important; /* Increased from 7.5pt */
+    line-height: 1.1 !important;
+    font-weight: 800 !important;
+  }
+  .text-xs, .text-sm {
+    font-size: 10.5pt !important; /* Increased from 8.5pt */
+    font-weight: 700 !important;
+  }
+}
+
+.print-only {
+  display: none;
+}
+
 @media (max-height: 550px) {
   .short-hidden {
     display: none !important;

@@ -34,7 +34,8 @@ import {
   Circle,
   CheckCircle2,
   Info,
-  Eraser
+  Eraser,
+  Printer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { generateSchedule, parseTeams, Team, Match, ScheduleConfig, CourtConfig, formatTime } from './lib/scheduler';
@@ -752,19 +753,6 @@ export default function App() {
           }
         }
 
-        // Resolución de Perdedores de Semifinales (3º y 4º puesto)
-        if (name.includes('Perdedor Semifinal') || name.includes('Perdedor S')) {
-          const semiId = (name.includes('Semifinal 1') || name.includes('S1')) ? 'Semifinal 1' : 'Semifinal 2';
-          const semiMatch = matches.find(sm => sm.category === m.category && sm.phase === semiId);
-          if (semiMatch && 
-              typeof semiMatch.score1 === 'number' && !isNaN(semiMatch.score1) && 
-              typeof semiMatch.score2 === 'number' && !isNaN(semiMatch.score2) &&
-              semiMatch.score1 !== semiMatch.score2) {
-            const loserRaw = semiMatch.score1 < semiMatch.score2 ? semiMatch.team1 : semiMatch.team2;
-            return resolveName(loserRaw);
-          }
-        }
-
         return name;
       };
 
@@ -775,6 +763,10 @@ export default function App() {
       };
     });
   }, [matches, classification]);
+
+  const isPauseTime = (time: string) => {
+    return time === config.generalBreakTime;
+  };
 
   const filteredMatches = useMemo(() => {
     return resolvedMatches.filter(m => {
@@ -803,6 +795,17 @@ export default function App() {
   const categories = Array.from(new Set(teams.map(t => t.category)));
   const phases = Array.from(new Set(resolvedMatches.map(m => m.phase)));
   const courtNumbers = config.courtConfigs.map(c => c.id.toString());
+
+  const handlePrint = () => {
+    console.log('Intentando imprimir...');
+    try {
+      window.print();
+      console.log('Comando window.print() enviado.');
+    } catch (err) {
+      console.error('Error al intentar imprimir:', err);
+      setError('La impresión directa está bloqueada por seguridad. Por favor, abre la app en una "Nueva Pestaña" (icono arriba a la derecha) para poder Imprimir / Guardar PDF.');
+    }
+  };
 
   if (!currentTournament) {
     return (
@@ -857,7 +860,7 @@ export default function App() {
             {isSidebarVisible ? <Settings className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
-          <div className="flex gap-1 bg-[#16213e] rounded-lg md:rounded-xl p-0.5 px-2 border border-slate-700 shadow-inner shrink-0 shadow-lg">
+          <div className="flex gap-1 md:gap-2 bg-[#16213e] rounded-lg md:rounded-xl p-0.5 px-2 border border-slate-700 shadow-inner shrink-0 shadow-lg overflow-x-auto no-scrollbar">
             <button 
               onClick={() => setTournamentView('courts')}
               className={`flex items-center justify-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-md md:rounded-lg text-[7px] md:text-[10px] font-black transition-all shrink-0 ${tournamentView === 'courts' ? 'bg-[#e94560] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
@@ -915,7 +918,7 @@ export default function App() {
 
         {/* Sidebar */}
         <aside className={`
-          fixed inset-y-0 left-0 z-[150] w-80 bg-white border-r border-slate-200 flex flex-col shadow-2xl shrink-0 transition-all duration-300 transform
+          fixed inset-y-0 left-0 z-[150] w-80 bg-white border-r border-slate-200 flex flex-col shadow-2xl shrink-0 transition-all duration-300 transform no-print
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:relative lg:translate-x-0 
           ${isSidebarVisible ? 'lg:flex lg:w-80' : 'lg:hidden lg:w-0'}
@@ -950,16 +953,23 @@ export default function App() {
                 )}
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 col-span-2">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 col-span-1">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Resumen Pistas</label>
                   <div className="flex items-center justify-between">
-                    <span className="font-mono font-black text-lg text-slate-900">{config.courtConfigs.length} Pistas</span>
+                    <span className="font-mono font-black text-base text-slate-900">{config.courtConfigs.length} Pistas</span>
                     <button 
                       onClick={() => setTournamentView('courts')}
-                      className="text-[10px] font-black text-[#e94560] uppercase hover:underline"
+                      className="text-[8px] font-black text-[#e94560] uppercase hover:underline"
                     >
-                      Configurar
+                      Config
                     </button>
+                  </div>
+                </div>
+                <div className="bg-[#1a1a2e] p-3 rounded-xl border border-white/5 col-span-1">
+                  <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Partidos Totales</label>
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-[#e94560]" />
+                    <span className="font-mono font-black text-base text-white">{resolvedMatches.length}</span>
                   </div>
                 </div>
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
@@ -1128,13 +1138,28 @@ export default function App() {
         </aside>
 
         {/* Content Area */}
-        <section className="flex-1 bg-slate-100 overflow-hidden flex flex-col min-w-0">
+        <section id="printable-content" className="flex-1 bg-slate-100 overflow-hidden flex flex-col min-w-0">
           {/* Tournament Actions Bar */}
           <div className="bg-white border-b border-slate-200 px-4 md:px-8 py-1 md:py-2 flex items-center justify-between shrink-0 gap-2 md:gap-4 overflow-x-auto no-scrollbar short-hidden">
-            <div className="flex items-center gap-2 md:gap-3">
-              <h2 className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
-                {tournamentView === 'teams' ? 'Equipos' : viewMode === 'grid' ? 'Vista Pistas' : viewMode === 'calendar' ? 'Calendario' : 'Clasificación'}
-              </h2>
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col">
+                <h2 className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap print:text-lg print:text-slate-900">
+                  {tournamentView === 'teams' ? 'Equipos' : viewMode === 'grid' ? 'Vista Pistas' : viewMode === 'calendar' ? 'Calendario' : 'Clasificación'}
+                </h2>
+                <div className="flex items-center gap-3 mt-1 text-[8px] font-bold text-slate-500 print-only print:text-xs">
+                  <span>{resolvedMatches.length} Partidos</span>
+                  <span className="w-1 h-1 rounded-full bg-slate-300" />
+                  <span>{config.courtConfigs.length} Pistas</span>
+                  <span className="w-1 h-1 rounded-full bg-slate-300" />
+                  <span>{new Date().toLocaleDateString()}</span>
+                </div>
+              </div>
+              {resolvedMatches.length > 0 && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 md:py-1 bg-slate-100 rounded-full border border-slate-200 shadow-sm shrink-0 no-print">
+                  <Trophy className="w-2.5 h-2.5 text-[#e94560]" />
+                  <span className="text-[9px] md:text-[10px] font-black text-slate-700">{resolvedMatches.length} <span className="text-slate-400 font-bold">PARTIDOS</span></span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
               <button
@@ -1155,6 +1180,15 @@ export default function App() {
               >
                 <Save className="w-3 h-3 md:w-3.5 md:h-3.5" />
                 <span className="hidden xs:inline ml-1">{isSaving ? '...' : 'GUARDAR'}</span>
+              </button>
+
+              <button 
+                onClick={handlePrint}
+                disabled={matches.length === 0}
+                className="flex items-center gap-1 px-2 py-1 md:px-4 md:py-2 bg-[#e94560] text-white rounded-lg md:rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all no-print disabled:opacity-50 shadow-lg hover:shadow-red-200"
+              >
+                <Printer className="w-3 h-3 md:w-3.5 md:h-3.5" />
+                <span className="hidden xs:inline ml-1">IMPRIMIR / PDF</span>
               </button>
             </div>
           </div>
@@ -1306,270 +1340,268 @@ export default function App() {
                     </div>
 
                     <div className="hidden xs:block text-[8px] md:text-[10px] font-black text-slate-400 shrink-0 whitespace-nowrap">Resultados: {filteredMatches.length}</div>
-                 </div>
+                  </div>
 
-                {(viewMode === 'grid' || viewMode === 'calendar') ? (
+                  {viewMode === 'classification' ? (
+                    <div className="flex-1 overflow-y-auto p-3 md:p-8 space-y-8 md:space-y-12 bg-white scroll-smooth custom-scrollbar">
+                        {/* Classification view respects filterCats */}
+                        {(categories as string[]).filter(cat => filterCats.length === 0 || filterCats.includes(cat)).map(cat => {
+                        const catData = classification[cat];
+                        return (
+                          <section key={cat} className="space-y-4 md:space-y-6">
+                            <h2 className="text-xl md:text-2xl font-black italic uppercase tracking-tighter text-[#1a1a2e]">{cat}</h2>
+                            
+                            {catData?.groups ? (
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
+                                {Object.entries(catData.groups as Record<string, any[]>).map(([letter, groupTeams]) => (
+                                  <div key={letter} className="space-y-2 md:space-y-4">
+                                    <h3 className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.2em] px-2 md:px-4 text-slate-400">Grupo {letter}</h3>
+                                    <div className="rounded-xl md:rounded-2xl border border-slate-200 overflow-hidden shadow-sm overflow-x-auto no-scrollbar">
+                                      <ClassificationTable teams={groupTeams} filterTeams={filterTeams} />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="rounded-xl md:rounded-2xl border border-slate-200 overflow-hidden shadow-sm overflow-x-auto no-scrollbar">
+                                <ClassificationTable teams={catData?.all || []} filterTeams={filterTeams} />
+                              </div>
+                            )}
 
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    
-                    {viewMode === 'grid' ? (
-                      <div className="flex-1 overflow-auto bg-slate-300/50 custom-scrollbar">
-                        <div className="min-w-max flex flex-col">
-                          {/* Sticky Header now inside the scrollable area */}
-                          <div 
-                            className="flex sticky top-0 z-30 bg-[#1a1a2e] text-slate-400 text-[8px] md:text-[10px] font-black uppercase tracking-widest border-b border-slate-800 select-none shadow-md short-compact"
-                            style={{ minWidth: `calc(60px + ${config.courtConfigs.length * 130}px)` }}
-                          >
-                            <div className="w-[60px] md:w-[120px] py-1.5 md:py-4 px-2 md:px-6 border-r border-slate-800 shrink-0 bg-[#1a1a2e] sticky left-0 z-40 shadow-[2px_0_5px_rgba(0,0,0,0.2)] short-compact">Horario</div>
-                            {config.courtConfigs.map((c, i) => (
-                              <div key={i} className={`w-[130px] md:w-[180px] py-1.5 md:py-4 px-1 md:px-6 text-center border-r border-slate-800 shrink-0 bg-[#1a1a2e] short-compact`}>
-                                Pista {c.id}
-                                {c.rimType === 'low' && (
-                                  <span className="block text-[6px] md:text-[7px] text-[#e94560] mt-0.5 font-black tracking-tighter uppercase short-hidden">Aro Bajo</span>
-                                )}
+                            <PlayoffSection category={cat} matches={resolvedMatches} onUpdateScore={updateScore} isLocked={isLocked} filterTeams={filterTeams} />
+                          </section>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    (viewMode === 'grid' || viewMode === 'calendar') ? (
+                      <div className="flex-1 flex flex-col overflow-hidden">
+                        
+                        {viewMode === 'grid' ? (
+                          <div className="flex-1 overflow-auto bg-slate-300/50 custom-scrollbar">
+                            <div className="min-w-max flex flex-col">
+                              {/* Sticky Header now inside the scrollable area */}
+                              <div 
+                                className="flex sticky top-0 z-30 bg-[#1a1a2e] text-slate-400 text-[8px] md:text-[10px] font-black uppercase tracking-widest border-b border-slate-800 select-none shadow-md short-compact"
+                                style={{ minWidth: `calc(60px + ${config.courtConfigs.length * 130}px)` }}
+                              >
+                                <div className="w-[60px] md:w-[120px] py-1.5 md:py-4 px-2 md:px-6 border-r border-slate-800 shrink-0 bg-[#1a1a2e] sticky left-0 z-40 shadow-[2px_0_5px_rgba(0,0,0,0.2)] short-compact print-time-column">Horario</div>
+                                {config.courtConfigs.map((c, i) => (
+                                  <div key={i} className={`w-[130px] md:w-[180px] py-1.5 md:py-4 px-1 md:px-6 text-center border-r border-slate-800 shrink-0 bg-[#1a1a2e] short-compact print-court-column`}>
+                                    Pista {c.id}
+                                    {c.rimType === 'low' && (
+                                      <span className="block text-[6px] md:text-[7px] text-[#e94560] mt-0.5 font-black tracking-tighter uppercase short-hidden">Aro Bajo</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="flex-1">
+                                <AnimatePresence>
+                                  {groupedMatchesByTime.map(([time, slotMatches], idx) => (
+                                    <div key={time} className={`flex flex-col ${isPauseTime(time) ? 'print-pause-row' : ''}`}>
+                                      <div 
+                                        className={`flex border-b border-white/20 min-h-[40px] md:min-h-[90px] short-compact ${isPauseTime(time) ? 'print-pause-row' : ''}`}
+                                        style={{ minWidth: `calc(60px + ${config.courtConfigs.length * 130}px)` }}
+                                      >
+                                        <div className="w-[60px] md:w-[120px] bg-white sticky left-0 z-20 flex flex-col items-center justify-center border-r border-slate-200 px-1 md:px-4 shrink-0 shadow-[2px_0_5px_rgba(0,0,0,0.05)] short-compact print-time-slot">
+                                           <span className="font-mono text-xs md:text-base font-black text-slate-700 leading-none print-time-text">{time}</span>
+                                        </div>
+                                        {config.courtConfigs.map((cc, courtIdx) => {
+                                           const match = slotMatches.find(m => m.court === cc.id);
+                                           const isHighlighted = filterTeams.length > 0 ? (filterTeams.includes(match?.team1 || '') || filterTeams.includes(match?.team2 || '')) : false;
+                                           const isOtherHighlighted = filterTeams.length > 0 && !isHighlighted;
+                                           const isSemi = match?.phase.toLowerCase().includes('semifinal');
+                                           const isFinal = !isSemi && (match?.phase.toLowerCase().includes('final'));
+                                           const isPlayoff = isSemi || isFinal;
+                                           return (
+                                             <div 
+                                               key={courtIdx} 
+                                               className={`w-[130px] md:w-[180px] p-1 md:p-1.5 bg-white relative shrink-0 print-court-slot ${courtIdx < config.courtConfigs.length - 1 ? 'border-r border-slate-100' : ''} ${selectedMatchId && !match ? 'ring-2 ring-indigo-400 ring-inset cursor-pointer' : ''}`}
+                                               onClick={() => {
+                                                 if (selectedMatchId && !match && !isLocked && !hasScores) {
+                                                   handleMatchDrop(selectedMatchId, cc.id, time);
+                                                   setSelectedMatchId(null);
+                                                 }
+                                               }}
+                                               onDragOver={(e) => {
+                                                 if (isLocked || hasScores) return;
+                                                 e.preventDefault();
+                                                 (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc';
+                                               }}
+                                               onDragLeave={(e) => {
+                                                 (e.currentTarget as HTMLElement).style.backgroundColor = '';
+                                               }}
+                                               onDrop={(e) => {
+                                                 if (isLocked || hasScores) return;
+                                                 e.preventDefault();
+                                                 (e.currentTarget as HTMLElement).style.backgroundColor = '';
+                                                 const mId = e.dataTransfer.getData("matchId");
+                                                 if (mId) {
+                                                   handleMatchDrop(mId, cc.id, time);
+                                                 }
+                                               }}
+                                             >
+                                                {match ? (
+                                                  <div 
+                                                    draggable={!isLocked && !hasScores}
+                                                    onClick={(e) => {
+                                                       if (isLocked || hasScores) return;
+                                                       e.stopPropagation();
+                                                       if (selectedMatchId === match.id) {
+                                                         setSelectedMatchId(null);
+                                                       } else if (selectedMatchId) {
+                                                         handleMatchDrop(selectedMatchId, cc.id, time);
+                                                         setSelectedMatchId(null);
+                                                       } else {
+                                                         setSelectedMatchId(match.id);
+                                                       }
+                                                     }}
+                                                     onDragStart={(e) => {
+                                                      if (isLocked || hasScores) {
+                                                        e.preventDefault();
+                                                        return;
+                                                      }
+                                                      e.dataTransfer.setData("matchId", match.id);
+                                                       e.dataTransfer.effectAllowed = "move";
+                                                     }}
+                                                     className={`h-full rounded-lg border-l-4 p-1 md:p-3 shadow-sm flex flex-col justify-center cursor-move active:scale-95 transition-all ${getCatStyles(match.category)} ${isOtherHighlighted ? 'opacity-10 grayscale scale-95' : 'opacity-100'} ${filterTeams.length > 0 && isHighlighted ? 'ring-2 ring-[#e94560] scale-105 z-20 bg-white' : ''} ${match.phase === 'Min. Partidos' ? 'border-dashed border-2 opacity-90' : match.phase === 'Relleno Extra' ? 'border-dotted border-2 opacity-50 grayscale hover:grayscale-0 transition-all' : ''} ${selectedMatchId === match.id ? 'ring-4 ring-indigo-500 scale-105 z-30 shadow-indigo-200' : ''} ${isFinal ? 'ring-4 ring-amber-400 border-l-amber-500 bg-amber-50/50 shadow-lg scale-105 z-10' : isSemi ? 'ring-2 ring-indigo-300 border-l-indigo-500 bg-indigo-50/30 shadow-md' : ''}`}
+                                                  >
+                                                     <div className="flex justify-between items-start mb-0.5 md:mb-1">
+                                                       <div className="flex items-center gap-0.5 md:gap-1">
+                                                         <p className="text-[5px] md:text-[7px] font-black uppercase opacity-60 truncate max-w-[40px] md:max-w-none">{match.category}</p>
+                                                         {match.phase === 'Min. Partidos' && (
+                                                           <span className="text-[4px] md:text-[5px] font-black bg-emerald-100 text-emerald-600 px-0.5 md:px-1 rounded-sm leading-tight uppercase" title="Cuentan para la clasificación">MIN.</span>
+                                                         )}
+                                                         {match.phase === 'Fase Relleno' && (
+                                                           <span className="text-[4px] md:text-[5px] font-black bg-slate-100 text-slate-400 px-0.5 md:px-1 rounded-sm leading-tight uppercase" title="No cuentan para la clasificación">EXT.</span>
+                                                         )}
+                                                       </div>
+                                                       <div className="flex items-center gap-1">
+                                                         {cc.rimType === 'low' && (
+                                                           <span className="hidden xs:inline text-[4px] md:text-[6px] font-black bg-[#e94560] text-white px-0.5 md:px-1 rounded-sm leading-tight">LOW</span>
+                                                         )}
+                                                         {!isLocked && (
+                                                           <button 
+                                                             onClick={(e) => { e.stopPropagation(); deleteMatch(match.id); }}
+                                                             className="p-0.5 md:p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all shadow-sm border border-transparent hover:border-red-100 bg-white/50"
+                                                             title="Borrar partido"
+                                                           >
+                                                             <Trash2 className="w-2.5 h-2.5 md:w-3.5 md:h-3.5" />
+                                                           </button>
+                                                         )}
+                                                       </div>
+                                                     </div>
+                                                    <div className={`text-[7.5px] md:text-[10px] font-bold leading-tight flex flex-col gap-0.5 ${isPlayoff ? 'text-slate-900 tracking-tight' : ''}`}>
+                                                      <span className="truncate">{match.team1}</span>
+                                                      <span className="truncate">{match.team2}</span>
+                                                    </div>
+                                                  </div>
+                                                ) : (
+                                                  !isLocked && (
+                                                    <button 
+                                                      onClick={() => setAddingMatchSlot({ courtId: cc.id, time: time })}
+                                                      className="absolute inset-x-0 bottom-0 top-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-slate-50/50 group z-10"
+                                                    >
+                                                      <div className="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-200 flex items-center justify-center text-slate-300 group-hover:text-[#e94560] group-hover:border-[#e94560] transition-colors">
+                                                        <Plus className="w-4 h-4" />
+                                                      </div>
+                                                    </button>
+                                                  )
+                                                )}
+                                             </div>
+                                           )
+                                        })}
+                                      </div>
+                                      {idx < groupedMatchesByTime.length - 1 && (
+                                        <div className="h-1 md:h-2 bg-slate-400/5 flex items-center px-6 relative border-b border-white/5 short-compact no-print" style={{ minWidth: `calc(80px + ${config.courtConfigs.length * 160}px)` }}>
+                                          <div className="w-full h-px bg-slate-200/20" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </AnimatePresence>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
+                            {groupedMatchesByTime.map(([time, slotMatches]) => (
+                              <div key={time} className="border-b border-slate-100">
+                                 <div className="bg-slate-50 px-4 md:px-8 py-1 md:py-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] md:sticky md:top-0 md:z-10">{time}</div>
+                                <div className="divide-y divide-slate-50 min-w-min overflow-x-auto">
+                                  {slotMatches.map(m => {
+                                    const lowerCat = m.category.toLowerCase();
+                                    const isSemi = lowerCat.includes('semi');
+                                    const isFinal = lowerCat.includes('final');
+                                    const isSpecial = isSemi || isFinal;
+                                    
+                                    return (
+                                      <div key={m.id} className={`px-4 md:px-8 py-2 md:py-4 grid grid-cols-[100px_80px_1fr_80px_1fr] md:grid-cols-12 items-center gap-4 hover:bg-slate-50 transition-colors min-w-[650px] md:min-w-0 ${isSpecial ? 'bg-[#1a1a2e] text-white hover:bg-[#252542]' : ''}`}>
+                                        <div className="col-span-1 md:col-span-2 text-[10px] font-black flex flex-col justify-center">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className={`text-[9px] font-bold ${isSpecial ? 'text-white' : 'text-slate-900'}`}>{m.category}</span>
+                                            {m.phase.includes('Ida') && (
+                                              <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${isSpecial ? 'bg-white/10 text-white border-white/20' : 'bg-sky-50 text-sky-500 border-sky-100'}`}>Ida</span>
+                                            )}
+                                            {m.phase.includes('Vuelta') && (
+                                              <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${isSpecial ? 'bg-white/10 text-white border-white/20' : 'bg-indigo-50 text-indigo-500 border-indigo-100'}`}>Vuelta</span>
+                                            )}
+                                            {(m.phase === 'Fase Relleno' || m.phase === 'Min. Partidos') && (
+                                              <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${m.phase === 'Min. Partidos' ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
+                                                {m.phase === 'Min. Partidos' ? 'Mínimos' : 'Fase Relleno'}
+                                              </span>
+                                            )}
+                                            {isSpecial && (isFinal ? <Trophy className="w-3 h-3 text-[#e94560]" /> : <MapPin className="w-3 h-3 text-[#e94560]" />)}
+                                          </div>
+                                        </div>
+                                        <div className="text-center md:col-span-1">
+                                          <span className={`px-2 py-1 text-[9px] md:text-[10px] font-black rounded uppercase tracking-tighter whitespace-nowrap ${isSpecial ? 'bg-[#e94560] text-white' : 'bg-slate-900 text-white'}`}>PISTA {m.court}</span>
+                                          {config.courtConfigs.find(cc => cc.id === m.court)?.rimType === 'low' && (
+                                            <span className={`block text-[7px] font-black tracking-tighter uppercase mt-0.5 ${isSpecial ? 'text-slate-400' : 'text-[#e94560]'}`}>Aro Bajo</span>
+                                          )}
+                                        </div>
+                                        <div className={`text-right font-bold text-xs md:col-span-3 ${isSpecial ? 'text-white italic' : ''}`}>{m.team1}</div>
+                                        <div className="flex items-center justify-center gap-2 md:col-span-2">
+                                          <input 
+                                            type="number" 
+                                            value={m.score1 ?? ''} 
+                                            onChange={e => updateScore(m.id, e.target.value === '' ? undefined : parseInt(e.target.value), m.score2)}
+                                            className={`w-12 h-12 md:w-14 md:h-14 rounded-xl border text-center text-sm md:text-lg font-black outline-none focus:border-[#e94560] shadow-sm transition-all ${isSpecial ? 'bg-white/10 border-white/20 text-white focus:bg-white/20' : 'bg-white border-slate-200 text-slate-900 focus:bg-slate-50'}`}
+                                          />
+                                          <span className={`text-lg font-black ${isSpecial ? 'text-[#e94560]' : 'text-slate-300'}`}>-</span>
+                                          <input 
+                                            type="number" 
+                                            value={m.score2 ?? ''} 
+                                            onChange={e => updateScore(m.id, m.score1, e.target.value === '' ? undefined : parseInt(e.target.value))}
+                                            className={`w-12 h-12 md:w-14 md:h-14 rounded-xl border text-center text-sm md:text-lg font-black outline-none focus:border-[#e94560] shadow-sm transition-all ${isSpecial ? 'bg-white/10 border-white/20 text-white focus:bg-white/20' : 'bg-white border-slate-200 text-slate-900 focus:bg-slate-50'}`}
+                                          />
+                                        </div>
+                                        <div className={`font-bold text-xs md:col-span-3 ${isSpecial ? 'text-white italic' : ''}`}>{m.team2}</div>
+                                        <div className="md:col-span-1 flex justify-end">
+                                          {!isLocked && (
+                                            <button 
+                                              onClick={() => deleteMatch(m.id)}
+                                              className={`p-2 rounded-xl transition-all ${isSpecial ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'}`}
+                                              title="Borrar partido"
+                                            >
+                                              <Trash2 className="w-5 h-5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             ))}
                           </div>
-
-                          <div className="flex-1">
-                            <AnimatePresence>
-                              {groupedMatchesByTime.map(([time, slotMatches], idx) => (
-                                <div key={time} className="flex flex-col">
-                                  <div 
-                                    className="flex border-b border-white/20 min-h-[40px] md:min-h-[90px] short-compact"
-                                    style={{ minWidth: `calc(60px + ${config.courtConfigs.length * 130}px)` }}
-                                  >
-                                    <div className="w-[60px] md:w-[120px] bg-white sticky left-0 z-20 flex flex-col items-center justify-center border-r border-slate-200 px-1 md:px-4 shrink-0 shadow-[2px_0_5px_rgba(0,0,0,0.05)] short-compact">
-                                       <span className="font-mono text-xs md:text-base font-black text-slate-700 leading-none">{time}</span>
-                                    </div>
-                                    {config.courtConfigs.map((cc, courtIdx) => {
-                                       const match = slotMatches.find(m => m.court === cc.id);
-                                       const isHighlighted = filterTeams.length > 0 ? (filterTeams.includes(match?.team1 || '') || filterTeams.includes(match?.team2 || '')) : false;
-                                       const isOtherHighlighted = filterTeams.length > 0 && !isHighlighted;
-                                       const isSemi = match?.phase.toLowerCase().includes('semifinal');
-                                       const isFinal = !isSemi && (match?.phase.toLowerCase().includes('final') || match?.phase === '3er y 4º Puesto');
-                                       const isPlayoff = isSemi || isFinal;
-                                       return (
-                                         <div 
-                                           key={courtIdx} 
-                                           className={`w-[130px] md:w-[180px] p-1 md:p-1.5 bg-white relative shrink-0 ${courtIdx < config.courtConfigs.length - 1 ? 'border-r border-slate-100' : ''} ${selectedMatchId && !match ? 'ring-2 ring-indigo-400 ring-inset cursor-pointer' : ''}`}
-                                           onClick={() => {
-                                             if (selectedMatchId && !match && !isLocked && !hasScores) {
-                                               handleMatchDrop(selectedMatchId, cc.id, time);
-                                               setSelectedMatchId(null);
-                                             }
-                                           }}
-                                           onDragOver={(e) => {
-                                             if (isLocked || hasScores) return;
-                                             e.preventDefault();
-                                             (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc';
-                                           }}
-                                           onDragLeave={(e) => {
-                                             (e.currentTarget as HTMLElement).style.backgroundColor = '';
-                                           }}
-                                           onDrop={(e) => {
-                                             if (isLocked || hasScores) return;
-                                             e.preventDefault();
-                                             (e.currentTarget as HTMLElement).style.backgroundColor = '';
-                                             const mId = e.dataTransfer.getData("matchId");
-                                             if (mId) {
-                                               handleMatchDrop(mId, cc.id, time);
-                                             }
-                                           }}
-                                         >
-                                            {match ? (
-                                              <div 
-                                                draggable={!isLocked && !hasScores}
-                                                onClick={(e) => {
-                                                   if (isLocked || hasScores) return;
-                                                   e.stopPropagation();
-                                                   if (selectedMatchId === match.id) {
-                                                     setSelectedMatchId(null);
-                                                   } else if (selectedMatchId) {
-                                                     handleMatchDrop(selectedMatchId, cc.id, time);
-                                                     setSelectedMatchId(null);
-                                                   } else {
-                                                     setSelectedMatchId(match.id);
-                                                   }
-                                                 }}
-                                                 onDragStart={(e) => {
-                                                  if (isLocked || hasScores) {
-                                                    e.preventDefault();
-                                                    return;
-                                                  }
-                                                  e.dataTransfer.setData("matchId", match.id);
-                                                   e.dataTransfer.effectAllowed = "move";
-                                                 }}
-                                                 className={`h-full rounded-lg border-l-4 p-1 md:p-3 shadow-sm flex flex-col justify-center cursor-move active:scale-95 transition-all ${getCatStyles(match.category)} ${isOtherHighlighted ? 'opacity-10 grayscale scale-95' : 'opacity-100'} ${filterTeams.length > 0 && isHighlighted ? 'ring-2 ring-[#e94560] scale-105 z-20 bg-white' : ''} ${match.phase === 'Min. Partidos' ? 'border-dashed border-2 opacity-90' : match.phase === 'Relleno Extra' ? 'border-dotted border-2 opacity-50 grayscale hover:grayscale-0 transition-all' : ''} ${selectedMatchId === match.id ? 'ring-4 ring-indigo-500 scale-105 z-30 shadow-indigo-200' : ''} ${isFinal ? 'ring-4 ring-amber-400 border-l-amber-500 bg-amber-50/50 shadow-lg scale-105 z-10' : isSemi ? 'ring-2 ring-indigo-300 border-l-indigo-500 bg-indigo-50/30 shadow-md' : ''}`}
-                                              >
-                                                 <div className="flex justify-between items-start mb-0.5 md:mb-1">
-                                                   <div className="flex items-center gap-0.5 md:gap-1">
-                                                     <p className="text-[5px] md:text-[7px] font-black uppercase opacity-60 truncate max-w-[40px] md:max-w-none">{match.category}</p>
-                                                     {match.phase === 'Min. Partidos' && (
-                                                       <span className="text-[4px] md:text-[5px] font-black bg-emerald-100 text-emerald-600 px-0.5 md:px-1 rounded-sm leading-tight uppercase" title="Cuentan para la clasificación">MIN.</span>
-                                                     )}
-                                                     {match.phase === 'Fase Relleno' && (
-                                                       <span className="text-[4px] md:text-[5px] font-black bg-slate-100 text-slate-400 px-0.5 md:px-1 rounded-sm leading-tight uppercase" title="No cuentan para la clasificación">EXT.</span>
-                                                     )}
-                                                   </div>
-                                                   <div className="flex items-center gap-1">
-                                                     {cc.rimType === 'low' && (
-                                                       <span className="hidden xs:inline text-[4px] md:text-[6px] font-black bg-[#e94560] text-white px-0.5 md:px-1 rounded-sm leading-tight">LOW</span>
-                                                     )}
-                                                     {!isLocked && (
-                                                       <button 
-                                                         onClick={(e) => { e.stopPropagation(); deleteMatch(match.id); }}
-                                                         className="p-0.5 md:p-1 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all shadow-sm border border-transparent hover:border-red-100 bg-white/50"
-                                                         title="Borrar partido"
-                                                       >
-                                                         <Trash2 className="w-2.5 h-2.5 md:w-3.5 md:h-3.5" />
-                                                       </button>
-                                                     )}
-                                                   </div>
-                                                 </div>
-                                                <div className={`text-[7.5px] md:text-[10px] font-bold leading-tight flex flex-col gap-0.5 ${isPlayoff ? 'text-slate-900 tracking-tight' : ''}`}>
-                                                  <span className="truncate">{match.team1}</span>
-                                                  <span className="truncate">{match.team2}</span>
-                                                </div>
-                                              </div>
-                                            ) : (
-                                              !isLocked && (
-                                                <button 
-                                                  onClick={() => setAddingMatchSlot({ courtId: cc.id, time: time })}
-                                                  className="absolute inset-x-0 bottom-0 top-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-slate-50/50 group z-10"
-                                                >
-                                                  <div className="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-200 flex items-center justify-center text-slate-300 group-hover:text-[#e94560] group-hover:border-[#e94560] transition-colors">
-                                                    <Plus className="w-4 h-4" />
-                                                  </div>
-                                                </button>
-                                              )
-                                            )}
-                                         </div>
-                                       )
-                                    })}
-                                  </div>
-                                  {idx < groupedMatchesByTime.length - 1 && (
-                                    <div className="h-3 md:h-6 bg-slate-400/10 flex items-center px-6 relative border-b border-white/5 short-compact" style={{ minWidth: `calc(80px + ${config.courtConfigs.length * 160}px)` }}>
-                                      <div className="w-full h-px bg-white/10" />
-                                      <span className="absolute left-[80px] md:left-[140px] px-2 md:px-3 py-0 md:py-1 bg-[#1a1a2e] rounded-full text-[6px] md:text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] shadow-sm">
-                                        Pausa {config.breakDuration} min
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </AnimatePresence>
-                          </div>
-                        </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
-                        {groupedMatchesByTime.map(([time, slotMatches]) => (
-                          <div key={time} className="border-b border-slate-100">
-                             <div className="bg-slate-50 px-4 md:px-8 py-1 md:py-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] md:sticky md:top-0 md:z-10">{time}</div>
-                            <div className="divide-y divide-slate-50 min-w-min overflow-x-auto">
-                              {slotMatches.map(m => {
-                                const lowerCat = m.category.toLowerCase();
-                                const isSemi = lowerCat.includes('semi');
-                                const isFinal = lowerCat.includes('final') || lowerCat.includes('3er');
-                                const isSpecial = isSemi || isFinal;
-                                
-                                return (
-                                  <div key={m.id} className={`px-4 md:px-8 py-2 md:py-4 grid grid-cols-[100px_80px_1fr_80px_1fr] md:grid-cols-12 items-center gap-4 hover:bg-slate-50 transition-colors min-w-[650px] md:min-w-0 ${isSpecial ? 'bg-[#1a1a2e] text-white hover:bg-[#252542]' : ''}`}>
-                                    <div className="col-span-1 md:col-span-2 text-[10px] font-black flex flex-col justify-center">
-                                      <div className="flex items-center gap-1.5">
-                                        <span className={`text-[9px] font-bold ${isSpecial ? 'text-white' : 'text-slate-900'}`}>{m.category}</span>
-                                        {m.phase.includes('Ida') && (
-                                          <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${isSpecial ? 'bg-white/10 text-white border-white/20' : 'bg-sky-50 text-sky-500 border-sky-100'}`}>Ida</span>
-                                        )}
-                                        {m.phase.includes('Vuelta') && (
-                                          <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${isSpecial ? 'bg-white/10 text-white border-white/20' : 'bg-indigo-50 text-indigo-500 border-indigo-100'}`}>Vuelta</span>
-                                        )}
-                                        {(m.phase === 'Fase Relleno' || m.phase === 'Min. Partidos') && (
-                                          <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${m.phase === 'Min. Partidos' ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
-                                            {m.phase === 'Min. Partidos' ? 'Mínimos' : 'Fase Relleno'}
-                                          </span>
-                                        )}
-                                        {isSpecial && (isFinal ? <Trophy className="w-3 h-3 text-[#e94560]" /> : <MapPin className="w-3 h-3 text-[#e94560]" />)}
-                                      </div>
-                                    </div>
-                                    <div className="text-center md:col-span-1">
-                                      <span className={`px-2 py-1 text-[9px] md:text-[10px] font-black rounded uppercase tracking-tighter whitespace-nowrap ${isSpecial ? 'bg-[#e94560] text-white' : 'bg-slate-900 text-white'}`}>PISTA {m.court}</span>
-                                      {config.courtConfigs.find(cc => cc.id === m.court)?.rimType === 'low' && (
-                                        <span className={`block text-[7px] font-black tracking-tighter uppercase mt-0.5 ${isSpecial ? 'text-slate-400' : 'text-[#e94560]'}`}>Aro Bajo</span>
-                                      )}
-                                    </div>
-                                    <div className={`text-right font-bold text-xs md:col-span-3 ${isSpecial ? 'text-white italic' : ''}`}>{m.team1}</div>
-                                    <div className="flex items-center justify-center gap-2 md:col-span-2">
-                                      <input 
-                                        type="number" 
-                                        value={m.score1 ?? ''} 
-                                        onChange={e => updateScore(m.id, e.target.value === '' ? undefined : parseInt(e.target.value), m.score2)}
-                                        className={`w-12 h-12 md:w-14 md:h-14 rounded-xl border text-center text-sm md:text-lg font-black outline-none focus:border-[#e94560] shadow-sm transition-all ${isSpecial ? 'bg-white/10 border-white/20 text-white focus:bg-white/20' : 'bg-white border-slate-200 text-slate-900 focus:bg-slate-50'}`}
-                                      />
-                                      <span className={`text-lg font-black ${isSpecial ? 'text-[#e94560]' : 'text-slate-300'}`}>-</span>
-                                      <input 
-                                        type="number" 
-                                        value={m.score2 ?? ''} 
-                                        onChange={e => updateScore(m.id, m.score1, e.target.value === '' ? undefined : parseInt(e.target.value))}
-                                        className={`w-12 h-12 md:w-14 md:h-14 rounded-xl border text-center text-sm md:text-lg font-black outline-none focus:border-[#e94560] shadow-sm transition-all ${isSpecial ? 'bg-white/10 border-white/20 text-white focus:bg-white/20' : 'bg-white border-slate-200 text-slate-900 focus:bg-slate-50'}`}
-                                      />
-                                    </div>
-                                    <div className={`font-bold text-xs md:col-span-3 ${isSpecial ? 'text-white italic' : ''}`}>{m.team2}</div>
-                                    <div className="md:col-span-1 flex justify-end">
-                                      {!isLocked && (
-                                        <button 
-                                          onClick={() => deleteMatch(m.id)}
-                                          className={`p-2 rounded-xl transition-all ${isSpecial ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'}`}
-                                          title="Borrar partido"
-                                        >
-                                          <Trash2 className="w-5 h-5" />
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                    <div className="flex-1 overflow-y-auto p-3 md:p-8 space-y-8 md:space-y-12 bg-white scroll-smooth custom-scrollbar">
-                      {/* Classification view respects filterCats */}
-                      {(categories as string[]).filter(cat => filterCats.length === 0 || filterCats.includes(cat)).map(cat => {
-                      const catData = classification[cat];
-                      return (
-                        <section key={cat} className="space-y-4 md:space-y-6">
-                          <h2 className="text-xl md:text-2xl font-black italic uppercase tracking-tighter text-[#1a1a2e]">{cat}</h2>
-                          
-                          {catData?.groups ? (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
-                              {Object.entries(catData.groups as Record<string, any[]>).map(([letter, groupTeams]) => (
-                                <div key={letter} className="space-y-2 md:space-y-4">
-                                  <h3 className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.2em] px-2 md:px-4 text-slate-400">Grupo {letter}</h3>
-                                  <div className="rounded-xl md:rounded-2xl border border-slate-200 overflow-hidden shadow-sm overflow-x-auto no-scrollbar">
-                                    <ClassificationTable teams={groupTeams} filterTeams={filterTeams} />
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="rounded-xl md:rounded-2xl border border-slate-200 overflow-hidden shadow-sm overflow-x-auto no-scrollbar">
-                              <ClassificationTable teams={catData?.all || []} filterTeams={filterTeams} />
-                            </div>
-                          )}
-
-                          <PlayoffSection category={cat} matches={resolvedMatches} onUpdateScore={updateScore} isLocked={isLocked} filterTeams={filterTeams} />
-                        </section>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )
+                    ) : null
+                  )}
+                </div>
+              )
           ) : tournamentView === 'teams' ? (
             <TeamsManagementView 
               appCategories={appCategories}
@@ -1695,8 +1727,7 @@ function PlayoffSection({ category, matches, onUpdateScore, isLocked, filterTeam
   const playoffMatches = matches.filter(m => 
     m.category === category && 
     (m.phase.toLowerCase().includes('semifinal') || 
-     m.phase.toLowerCase().includes('final') || 
-     m.phase === '3er y 4º Puesto')
+     m.phase.toLowerCase().includes('final'))
   );
   
   if (playoffMatches.length === 0) return null;
@@ -1704,7 +1735,6 @@ function PlayoffSection({ category, matches, onUpdateScore, isLocked, filterTeam
   const s1 = playoffMatches.find(m => m.phase === 'Semifinal 1');
   const s2 = playoffMatches.find(m => m.phase === 'Semifinal 2');
   const final = playoffMatches.find(m => m.phase === 'Final');
-  const consolation = playoffMatches.find(m => m.phase === '3er y 4º Puesto');
 
   return (
     <div className="mt-8 md:mt-12 bg-[#1a1a2e] rounded-2xl md:rounded-3xl p-6 md:p-10 overflow-hidden relative border border-white/5 shadow-2xl">
@@ -1735,17 +1765,10 @@ function PlayoffSection({ category, matches, onUpdateScore, isLocked, filterTeam
           </div>
         )}
 
-        {/* Finals Column (Main & 3rd/4th) */}
-        {(final || consolation) && (
+        {/* Finals Column */}
+        {final && (
           <div className="flex flex-col justify-center gap-6 md:gap-10 w-full md:w-80">
-            {final && (
-              <MatchNode match={final} label="GRAN FINAL" isMain onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />
-            )}
-            {consolation && (
-              <div className="opacity-90 scale-95 md:border-t md:border-white/5 md:pt-4">
-                <MatchNode match={consolation} label="3º y 4º PUESTO" onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />
-              </div>
-            )}
+            <MatchNode match={final} label="GRAN FINAL" isMain onUpdateScore={onUpdateScore} isLocked={isLocked} filterTeams={filterTeams} />
           </div>
         )}
       </div>

@@ -164,9 +164,6 @@ function generateTournamentMatchups(teams: Team[], config: ScheduleConfig): Matc
       allMatchups.push({ category: cat, a: '1º Gr.A', b: '2º Gr.B', phase: 'Semifinal 1', priority: 5 });
       allMatchups.push({ category: cat, a: '1º Gr.B', b: '2º Gr.A', phase: 'Semifinal 2', priority: 5 });
       
-      // 3º y 4º Puesto (Should always be possible if we have Semis)
-      allMatchups.push({ category: cat, a: 'Perdedor Semifinal 1', b: 'Perdedor Semifinal 2', phase: '3er y 4º Puesto', priority: 10 });
-
       // Finals
       allMatchups.push({ category: cat, a: 'Ganador Semifinal 1', b: 'Ganador Semifinal 2', phase: 'Final', priority: 10 });
     }
