@@ -1184,7 +1184,7 @@ export default function App() {
                                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                className="absolute top-full left-0 mt-2 w-[240px] bg-white rounded-xl shadow-2xl border border-slate-200 z-[70] py-2 max-h-[300px] overflow-y-auto custom-scrollbar"
+                                className="absolute top-full right-0 mt-2 w-[240px] max-w-[calc(100vw-1.5rem)] bg-white rounded-xl shadow-2xl border border-slate-200 z-[70] py-2 max-h-[300px] overflow-y-auto custom-scrollbar md:left-0 md:right-auto"
                               >
                                 <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50 mb-1 sticky top-0 z-10">
                                   <span className="text-[9px] font-black uppercase text-slate-400">Filtrar</span>
@@ -1516,7 +1516,7 @@ export default function App() {
                             {groupedMatchesByTime.map(([time, slotMatches]) => (
                               <div key={time} className="border-b border-slate-100">
                                  <div className="bg-slate-50 px-4 md:px-8 py-1 md:py-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] md:sticky md:top-0 md:z-10">{time}</div>
-                                <div className="divide-y divide-slate-50 min-w-min overflow-x-auto">
+                                <div className="divide-y divide-slate-50 md:min-w-min md:overflow-x-auto">
                                   {slotMatches.map(m => {
                                     const lowerCat = m.category.toLowerCase();
                                     const isSemi = lowerCat.includes('semi');
@@ -1524,57 +1524,123 @@ export default function App() {
                                     const isSpecial = isSemi || isFinal;
                                     
                                     return (
-                                      <div key={m.id} className={`px-4 md:px-8 py-2 md:py-4 grid grid-cols-[100px_80px_1fr_80px_1fr] md:grid-cols-12 items-center gap-4 hover:bg-slate-50 transition-colors min-w-[650px] md:min-w-0 ${isSpecial ? 'bg-[#1a1a2e] text-white hover:bg-[#252542]' : ''}`}>
-                                        <div className="col-span-1 md:col-span-2 text-[10px] font-black flex flex-col justify-center">
-                                          <div className="flex items-center gap-1.5">
-                                            <span className={`text-[9px] font-bold ${isSpecial ? 'text-white' : 'text-slate-900'}`}>{m.category}</span>
-                                            {m.phase.includes('Ida') && (
-                                              <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${isSpecial ? 'bg-white/10 text-white border-white/20' : 'bg-sky-50 text-sky-500 border-sky-100'}`}>Ida</span>
+                                      <div key={m.id} className={`px-3 md:px-8 py-2.5 md:py-3.5 transition-colors ${isSpecial ? 'bg-[#1a1a2e] text-white hover:bg-[#252542]' : ''}`}>
+                                        <div className="md:hidden space-y-3 min-h-[136px]">
+                                          <div className={`rounded-xl border px-2.5 py-2 ${isSpecial ? 'border-white/15 bg-white/5' : 'border-slate-200 bg-slate-50/70'}`}>
+                                          <div className="flex items-start justify-between gap-3">
+                                            <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                                              <span className={`text-[10px] font-black tracking-tight ${isSpecial ? 'text-white' : 'text-slate-900'}`}>{m.category}</span>
+                                              {m.phase.includes('Ida') && (
+                                                <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border shrink-0 ${isSpecial ? 'bg-white/10 text-white border-white/20' : 'bg-sky-50 text-sky-500 border-sky-100'}`}>Ida</span>
+                                              )}
+                                              {m.phase.includes('Vuelta') && (
+                                                <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border shrink-0 ${isSpecial ? 'bg-white/10 text-white border-white/20' : 'bg-indigo-50 text-indigo-500 border-indigo-100'}`}>Vuelta</span>
+                                              )}
+                                              {(m.phase === 'Fase Relleno' || m.phase === 'Min. Partidos') && (
+                                                <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border shrink-0 ${m.phase === 'Min. Partidos' ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
+                                                  {m.phase === 'Min. Partidos' ? 'Mínimos' : 'Fase Relleno'}
+                                                </span>
+                                              )}
+                                              {isSpecial && (isFinal ? <Trophy className="w-3 h-3 text-[#e94560]" /> : <MapPin className="w-3 h-3 text-[#e94560]" />)}
+                                            </div>
+                                            {!isLocked && (
+                                              <button
+                                                onClick={() => deleteMatch(m.id)}
+                                                className={`p-2 rounded-lg transition-all shrink-0 ${isSpecial ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'}`}
+                                                title="Borrar partido"
+                                              >
+                                                <Trash2 className="w-4 h-4" />
+                                              </button>
                                             )}
-                                            {m.phase.includes('Vuelta') && (
-                                              <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${isSpecial ? 'bg-white/10 text-white border-white/20' : 'bg-indigo-50 text-indigo-500 border-indigo-100'}`}>Vuelta</span>
+                                          </div>
+
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className={`px-2 py-1 text-[9px] font-black rounded uppercase tracking-tighter whitespace-nowrap ${isSpecial ? 'bg-[#e94560] text-white' : 'bg-slate-900 text-white'}`}>PISTA {m.court}</span>
+                                            {config.courtConfigs.find(cc => cc.id === m.court)?.rimType === 'low' && (
+                                              <span className={`text-[8px] font-black tracking-tighter uppercase shrink-0 ${isSpecial ? 'text-slate-400' : 'text-[#e94560]'}`}>Aro Bajo</span>
                                             )}
-                                            {(m.phase === 'Fase Relleno' || m.phase === 'Min. Partidos') && (
-                                              <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${m.phase === 'Min. Partidos' ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
-                                                {m.phase === 'Min. Partidos' ? 'Mínimos' : 'Fase Relleno'}
-                                              </span>
-                                            )}
-                                            {isSpecial && (isFinal ? <Trophy className="w-3 h-3 text-[#e94560]" /> : <MapPin className="w-3 h-3 text-[#e94560]" />)}
+                                          </div>
+
+                                          <div className="grid grid-cols-[1fr_auto] items-center gap-2.5">
+                                            <div className={`font-bold text-[13px] leading-tight break-words pr-1 ${isSpecial ? 'text-white italic' : 'text-slate-900'}`}>{m.team1}</div>
+                                            <input
+                                              type="number"
+                                              value={m.score1 ?? ''}
+                                              onChange={e => updateScore(m.id, e.target.value === '' ? undefined : parseInt(e.target.value), m.score2)}
+                                              inputMode="numeric"
+                                              className={`w-12 h-12 rounded-xl border text-center text-base font-black outline-none focus:border-[#e94560] shadow-sm transition-all touch-manipulation ${isSpecial ? 'bg-white/10 border-white/20 text-white focus:bg-white/20' : 'bg-white border-slate-200 text-slate-900 focus:bg-slate-50'}`}
+                                            />
+                                          </div>
+
+                                          <div className="h-px bg-slate-200/70" />
+
+                                          <div className="grid grid-cols-[1fr_auto] items-center gap-2.5">
+                                            <div className={`font-bold text-[13px] leading-tight break-words pr-1 ${isSpecial ? 'text-white italic' : 'text-slate-900'}`}>{m.team2}</div>
+                                            <input
+                                              type="number"
+                                              value={m.score2 ?? ''}
+                                              onChange={e => updateScore(m.id, m.score1, e.target.value === '' ? undefined : parseInt(e.target.value))}
+                                              inputMode="numeric"
+                                              className={`w-12 h-12 rounded-xl border text-center text-base font-black outline-none focus:border-[#e94560] shadow-sm transition-all touch-manipulation ${isSpecial ? 'bg-white/10 border-white/20 text-white focus:bg-white/20' : 'bg-white border-slate-200 text-slate-900 focus:bg-slate-50'}`}
+                                            />
+                                          </div>
                                           </div>
                                         </div>
-                                        <div className="text-center md:col-span-1">
-                                          <span className={`px-2 py-1 text-[9px] md:text-[10px] font-black rounded uppercase tracking-tighter whitespace-nowrap ${isSpecial ? 'bg-[#e94560] text-white' : 'bg-slate-900 text-white'}`}>PISTA {m.court}</span>
-                                          {config.courtConfigs.find(cc => cc.id === m.court)?.rimType === 'low' && (
-                                            <span className={`block text-[7px] font-black tracking-tighter uppercase mt-0.5 ${isSpecial ? 'text-slate-400' : 'text-[#e94560]'}`}>Aro Bajo</span>
-                                          )}
-                                        </div>
-                                        <div className={`text-right font-bold text-xs md:col-span-3 ${isSpecial ? 'text-white italic' : ''}`}>{m.team1}</div>
-                                        <div className="flex items-center justify-center gap-2 md:col-span-2">
-                                          <input 
-                                            type="number" 
-                                            value={m.score1 ?? ''} 
-                                            onChange={e => updateScore(m.id, e.target.value === '' ? undefined : parseInt(e.target.value), m.score2)}
-                                            className={`w-12 h-12 md:w-14 md:h-14 rounded-xl border text-center text-sm md:text-lg font-black outline-none focus:border-[#e94560] shadow-sm transition-all ${isSpecial ? 'bg-white/10 border-white/20 text-white focus:bg-white/20' : 'bg-white border-slate-200 text-slate-900 focus:bg-slate-50'}`}
-                                          />
-                                          <span className={`text-lg font-black ${isSpecial ? 'text-[#e94560]' : 'text-slate-300'}`}>-</span>
-                                          <input 
-                                            type="number" 
-                                            value={m.score2 ?? ''} 
-                                            onChange={e => updateScore(m.id, m.score1, e.target.value === '' ? undefined : parseInt(e.target.value))}
-                                            className={`w-12 h-12 md:w-14 md:h-14 rounded-xl border text-center text-sm md:text-lg font-black outline-none focus:border-[#e94560] shadow-sm transition-all ${isSpecial ? 'bg-white/10 border-white/20 text-white focus:bg-white/20' : 'bg-white border-slate-200 text-slate-900 focus:bg-slate-50'}`}
-                                          />
-                                        </div>
-                                        <div className={`font-bold text-xs md:col-span-3 ${isSpecial ? 'text-white italic' : ''}`}>{m.team2}</div>
-                                        <div className="md:col-span-1 flex justify-end">
-                                          {!isLocked && (
-                                            <button 
-                                              onClick={() => deleteMatch(m.id)}
-                                              className={`p-2 rounded-xl transition-all ${isSpecial ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'}`}
-                                              title="Borrar partido"
-                                            >
-                                              <Trash2 className="w-5 h-5" />
-                                            </button>
-                                          )}
+
+                                        <div className={`hidden md:grid grid-cols-[100px_80px_1fr_80px_1fr] md:grid-cols-12 items-center gap-4 min-w-[650px] md:min-w-0 ${isSpecial ? 'text-white' : ''}`}>
+                                          <div className={`col-span-12 grid grid-cols-[100px_80px_1fr_80px_1fr] md:grid-cols-12 items-center gap-4 min-w-[650px] md:min-w-0 rounded-xl border px-2.5 py-2 ${isSpecial ? 'border-white/15 bg-white/5' : 'border-slate-200 bg-slate-50/70'}`}>
+                                          <div className="col-span-1 md:col-span-2 text-[10px] font-black flex flex-col justify-center">
+                                            <div className="inline-flex items-center gap-1.5 w-fit">
+                                              <span className={`text-[9px] font-bold ${isSpecial ? 'text-white' : 'text-slate-900'}`}>{m.category}</span>
+                                              {m.phase.includes('Ida') && (
+                                                <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${isSpecial ? 'bg-white/10 text-white border-white/20' : 'bg-sky-50 text-sky-500 border-sky-100'}`}>Ida</span>
+                                              )}
+                                              {m.phase.includes('Vuelta') && (
+                                                <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${isSpecial ? 'bg-white/10 text-white border-white/20' : 'bg-indigo-50 text-indigo-500 border-indigo-100'}`}>Vuelta</span>
+                                              )}
+                                              {(m.phase === 'Fase Relleno' || m.phase === 'Min. Partidos') && (
+                                                <span className={`text-[7px] px-1 rounded-sm leading-tight font-black uppercase border ${m.phase === 'Min. Partidos' ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
+                                                  {m.phase === 'Min. Partidos' ? 'Mínimos' : 'Fase Relleno'}
+                                                </span>
+                                              )}
+                                              {isSpecial && (isFinal ? <Trophy className="w-3 h-3 text-[#e94560]" /> : <MapPin className="w-3 h-3 text-[#e94560]" />)}
+                                            </div>
+                                          </div>
+                                          <div className="text-center md:col-span-1">
+                                            <span className={`px-2 py-1 text-[9px] md:text-[10px] font-black rounded uppercase tracking-tighter whitespace-nowrap ${isSpecial ? 'bg-[#e94560] text-white' : 'bg-slate-900 text-white'}`}>PISTA {m.court}</span>
+                                            {config.courtConfigs.find(cc => cc.id === m.court)?.rimType === 'low' && (
+                                              <span className={`block text-[7px] font-black tracking-tighter uppercase mt-0.5 ${isSpecial ? 'text-slate-400' : 'text-[#e94560]'}`}>Aro Bajo</span>
+                                            )}
+                                          </div>
+                                          <div className={`text-right font-bold text-xs md:col-span-3 ${isSpecial ? 'text-white italic' : ''}`}>{m.team1}</div>
+                                          <div className="flex items-center justify-center gap-2 md:col-span-2">
+                                            <input
+                                              type="number"
+                                              value={m.score1 ?? ''}
+                                              onChange={e => updateScore(m.id, e.target.value === '' ? undefined : parseInt(e.target.value), m.score2)}
+                                              className={`w-12 h-12 md:w-14 md:h-14 rounded-xl border text-center text-sm md:text-lg font-black outline-none focus:border-[#e94560] shadow-sm transition-all ${isSpecial ? 'bg-white/10 border-white/20 text-white focus:bg-white/20' : 'bg-white border-slate-200 text-slate-900 focus:bg-slate-50'}`}
+                                            />
+                                            <span className={`text-lg font-black ${isSpecial ? 'text-[#e94560]' : 'text-slate-300'}`}>-</span>
+                                            <input
+                                              type="number"
+                                              value={m.score2 ?? ''}
+                                              onChange={e => updateScore(m.id, m.score1, e.target.value === '' ? undefined : parseInt(e.target.value))}
+                                              className={`w-12 h-12 md:w-14 md:h-14 rounded-xl border text-center text-sm md:text-lg font-black outline-none focus:border-[#e94560] shadow-sm transition-all ${isSpecial ? 'bg-white/10 border-white/20 text-white focus:bg-white/20' : 'bg-white border-slate-200 text-slate-900 focus:bg-slate-50'}`}
+                                            />
+                                          </div>
+                                          <div className={`font-bold text-xs md:col-span-3 ${isSpecial ? 'text-white italic' : ''}`}>{m.team2}</div>
+                                          <div className="md:col-span-1 flex justify-end">
+                                            {!isLocked && (
+                                              <button
+                                                onClick={() => deleteMatch(m.id)}
+                                                className={`p-2 rounded-xl transition-all ${isSpecial ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'}`}
+                                                title="Borrar partido"
+                                              >
+                                                <Trash2 className="w-5 h-5" />
+                                              </button>
+                                            )}
+                                          </div>
+                                          </div>
                                         </div>
                                       </div>
                                     );
