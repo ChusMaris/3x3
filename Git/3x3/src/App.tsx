@@ -30,7 +30,7 @@ import {
   Printer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { generateSchedule, parseTeams, Team, Match, ScheduleConfig, formatTime } from './lib/scheduler';
+import { generateSchedule, parseTeams, Team, Match, ScheduleConfig, formatTime, CategoryMatchType } from './lib/scheduler';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { TeamsManagementView } from './components/TeamsManagementView';
 import { CourtsManagementView } from './components/CourtsManagementView';
@@ -39,7 +39,6 @@ import { PlayoffSection } from './components/PlayoffSection';
 import { LandingPage } from './components/LandingPage';
 import { AddManualMatchForm } from './components/AddManualMatchForm';
 import { INITIAL_CATEGORIES, createDefaultScheduleConfig } from './constants/tournament';
-import { usePersistentCategories } from './hooks/usePersistentCategories';
 import { getCatStyles } from './utils/categoryStyles';
 import type { Tournament } from './types/tournament';
 
@@ -52,7 +51,7 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const [appCategories, setAppCategories] = usePersistentCategories('app_categories', INITIAL_CATEGORIES);
+  const [appCategories, setAppCategories] = useState<string[]>(INITIAL_CATEGORIES);
 
   const [teamsByCategory, setTeamsByCategory] = useState<Record<string, string[]>>({});
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -76,6 +75,7 @@ export default function App() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [criticalError, setCriticalError] = useState<string | null>(null);
 
   const teams = useMemo(() => {
     const list: Team[] = [];
@@ -95,18 +95,23 @@ export default function App() {
 
   // Auto-generate tournament when config or teams change (ONLY if Open and NO matches exist)
   useEffect(() => {
-    if (!isLocked && teams.length > 0 && !hasScores && matches.length === 0) {
+    if (!isLocked && teams.length > 0 && !hasScores && matches.length === 0 && !criticalError) {
       try {
         const generated = generateSchedule(teams, config);
         setMatches(generated);
         setError(null);
       } catch (e) {
         if (e instanceof Error) {
-          setError(e.message);
+          // Check if it's a critical error
+          if (e.message.includes("está configurada para comenzar")) {
+            setCriticalError(e.message);
+          } else {
+            setError(e.message);
+          }
         }
       }
     }
-  }, [teams, isLocked, hasScores, config]);
+  }, [teams, isLocked, hasScores, config, criticalError]);
 
   const toggleFillPhase = () => {
     const nextVal = !config.useFillPhase;
@@ -164,8 +169,9 @@ export default function App() {
     
     // Legacy migration + loading
     const teamsData = t.data.teamsByCategory as Record<string, string[]> | undefined;
+    let resolvedTeamsByCategory: Record<string, string[]> = {};
     if (teamsData && Object.keys(teamsData).length > 0) {
-      setTeamsByCategory(teamsData);
+      resolvedTeamsByCategory = teamsData;
     } else if (t.data.teamInput) {
       // Parse legacy string input
       const parsed = parseTeams(t.data.teamInput);
@@ -174,13 +180,24 @@ export default function App() {
         if (!mig[team.category]) mig[team.category] = [];
         mig[team.category].push(team.name);
       });
-      setTeamsByCategory(mig);
-    } else {
-      setTeamsByCategory({});
+      resolvedTeamsByCategory = mig;
     }
+
+    setTeamsByCategory(resolvedTeamsByCategory);
+
+    // Categories are scoped to each tournament.
+    const storedCategories = Array.isArray(t.data.appCategories) ? t.data.appCategories : [];
+    const configCategories = Object.keys((t.data.config as any)?.categoryConfig || {});
+    const loadedCategories = Array.from(new Set([
+      ...INITIAL_CATEGORIES,
+      ...storedCategories,
+      ...Object.keys(resolvedTeamsByCategory),
+      ...configCategories
+    ]));
+    setAppCategories(loadedCategories);
     
     // Reset active tab to first category that has teams, or first in list
-    const firstCat = Object.keys(t.data.teamsByCategory || {}).sort()[0] || appCategories[0];
+    const firstCat = Object.keys(resolvedTeamsByCategory).sort()[0] || loadedCategories[0] || INITIAL_CATEGORIES[0];
     setActiveTab(firstCat);
     
     // Convert string dates back to Date objects
@@ -218,6 +235,7 @@ export default function App() {
     newConfig.minGamesPerTeam = newConfig.minGamesPerTeam || 3;
     newConfig.playoffThreshold = newConfig.playoffThreshold || 6;
     newConfig.useFillPhase = newConfig.useFillPhase ?? false;
+    newConfig.categoryConfig = newConfig.categoryConfig || {};
 
     setConfig(newConfig);
   };
@@ -254,6 +272,7 @@ export default function App() {
         config,
         teamInput,
         teamsByCategory,
+        appCategories,
         isLocked
       };
 
@@ -293,10 +312,14 @@ export default function App() {
           endTime: "14:30",
           minGamesPerTeam: 3,
           generalBreakTime: "11:30",
-          generalBreakDuration: 15
+          generalBreakDuration: 15,
+          playoffThreshold: 6,
+          useFillPhase: false,
+          categoryConfig: {}
         },
         teamInput: "",
-        teamsByCategory: {}
+        teamsByCategory: {},
+        appCategories: [...INITIAL_CATEGORIES]
       };
 
       const { data, error } = await supabase
@@ -448,6 +471,7 @@ export default function App() {
         return;
       }
 
+      setCriticalError(null);
       setError(null);
       const generated = generateSchedule(teams, config);
       setMatches(generated);
@@ -459,7 +483,13 @@ export default function App() {
     } catch (e: any) {
       console.error(e);
       const msg = e instanceof Error ? e.message : "Error desconocido";
-      setError("Error de configuración: " + msg + ". Prueba a ampliar el horario, añadir más pistas o reducir la duración de los partidos.");
+      
+      // Check if it's a critical configuration error (category start time conflict)
+      if (msg.includes("está configurada para comenzar")) {
+        setCriticalError(msg);
+      } else {
+        setError("Error de configuración: " + msg + ". Prueba a ampliar el horario, añadir más pistas o reducir la duración de los partidos.");
+      }
     }
   };
 
@@ -579,12 +609,19 @@ export default function App() {
     // Results per category, potentially split by groups
     const result: Record<string, { all: any[], groups?: Record<string, any[]> }> = {};
     
+    const resolveCategoryMatchType = (cat: string, count: number): CategoryMatchType => {
+      const explicitType = config.categoryConfig?.[cat]?.matchType;
+      if (explicitType) return explicitType;
+      return count < (config.playoffThreshold || 6) ? 'Liga' : 'Playoffs';
+    };
+
     Object.keys(stats).forEach(cat => {
       const catTeamsBase = teams.filter(t => t.category === cat);
       const allTeamsData = Object.entries(stats[cat]).map(([name, data]) => ({ name, ...data }));
       
       const n = catTeamsBase.length;
-      if (n > (config.playoffThreshold || 6)) {
+      const matchType = resolveCategoryMatchType(cat, n);
+      if (matchType === 'Playoffs' && n >= 4) {
         // Handle 2 groups logic (same as scheduler.ts)
         let groupA_Names: string[] = [];
         let groupB_Names: string[] = [];
@@ -708,8 +745,27 @@ export default function App() {
     });
   }, [matches, classification]);
 
+  const parseClockToMinutes = (time: string) => {
+    const [h, m] = time.split(':').map(Number);
+    return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+  };
+
+  const formatMinutesToClock = (totalMinutes: number) => {
+    const normalized = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+    const h = Math.floor(normalized / 60).toString().padStart(2, '0');
+    const m = (normalized % 60).toString().padStart(2, '0');
+    return `${h}:${m}`;
+  };
+
+  const generalBreakDuration = Math.max(0, config.generalBreakDuration || 0);
+  const generalBreakStartMinutes = parseClockToMinutes(config.generalBreakTime || '11:30');
+  const generalBreakEndMinutes = generalBreakStartMinutes + generalBreakDuration;
+  const generalBreakEndLabel = formatMinutesToClock(generalBreakEndMinutes);
+
   const isPauseTime = (time: string) => {
-    return time === config.generalBreakTime;
+    if (generalBreakDuration <= 0) return false;
+    const t = parseClockToMinutes(time);
+    return t >= generalBreakStartMinutes && t < generalBreakEndMinutes;
   };
 
   const filteredMatches = useMemo(() => {
@@ -735,6 +791,13 @@ export default function App() {
         [...dayMatches].sort((m1, m2) => m1.court - m2.court)
       ] as [string, Match[]]);
   }, [filteredMatches]);
+
+  const shouldRenderGeneralBreakBeforeIndex = (idx: number) => {
+    if (generalBreakDuration <= 0 || groupedMatchesByTime.length === 0) return false;
+    const current = parseClockToMinutes(groupedMatchesByTime[idx][0]);
+    const prev = idx > 0 ? parseClockToMinutes(groupedMatchesByTime[idx - 1][0]) : Number.NEGATIVE_INFINITY;
+    return prev < generalBreakStartMinutes && current >= generalBreakStartMinutes;
+  };
 
   const categories = Array.from(new Set(teams.map(t => t.category)));
   const phases = Array.from(new Set(resolvedMatches.map(m => m.phase)));
@@ -779,7 +842,7 @@ export default function App() {
             <Trophy className="w-5 h-5 md:w-8 md:h-8 text-white" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-[10px] md:text-xl font-black italic tracking-tighter uppercase leading-none truncate max-w-[80px] xs:max-w-none">
+            <h1 className="text-[10px] md:text-xl font-black italic tracking-tighter uppercase leading-none truncate pr-1 max-w-[190px] sm:max-w-[290px] md:max-w-none">
               {currentTournament.name} <span className="text-[#e94560] hidden md:inline">3x3</span>
             </h1>
             <p className="text-[6px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 md:mt-1 truncate leading-none">
@@ -985,19 +1048,6 @@ export default function App() {
                     className={`w-full bg-transparent font-mono font-black text-lg outline-none appearance-auto ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <label className="text-[9px] font-black text-[#e94560] uppercase block mb-1">Umbral Playoff</label>
-                  <input 
-                    type="number" 
-                    value={config.playoffThreshold ?? ''} 
-                    disabled={isLocked || hasScores}
-                    onChange={e => {
-                      const val = e.target.value;
-                      setConfig(c => ({...c, playoffThreshold: val === '' ? undefined as any : Math.max(2, Number(val))}));
-                    }} 
-                    className={`w-full bg-transparent font-mono font-black text-lg outline-none appearance-auto ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
-                  />
-                </div>
                 <div className="bg-slate-100 p-3 rounded-xl border border-slate-200 col-span-2 flex items-center justify-between">
                   <div className="flex flex-col">
                     <label className="text-[10px] font-black text-[#e94560] uppercase block">Fase de Relleno</label>
@@ -1060,8 +1110,23 @@ export default function App() {
           </div>
           
           <div className="p-6 bg-slate-50 border-t border-slate-200">
-            {error && (
-              <div className="mb-4 p-3 bg-red-100 text-red-600 rounded-xl text-[10px] font-bold flex gap-2 animate-bounce">
+            {criticalError && (
+              <div className="mb-4 p-4 bg-red-50 border-2 border-red-400 text-red-700 rounded-xl text-[11px] font-bold flex gap-3 items-start">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                <div className="flex-1 flex flex-col gap-2">
+                  <span className="text-red-900 font-black">Conflicto de horario</span>
+                  <span className="text-red-700 font-semibold leading-relaxed">{criticalError}</span>
+                  <button 
+                    onClick={() => setCriticalError(null)}
+                    className="text-red-600 hover:text-red-800 underline text-[10px] font-black mt-2 text-left"
+                  >
+                    Cerrar mensaje
+                  </button>
+                </div>
+              </div>
+            )}
+            {error && !criticalError && (
+              <div className="mb-4 p-3 bg-yellow-100 text-yellow-700 rounded-xl text-[10px] font-bold flex gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -1387,6 +1452,26 @@ export default function App() {
                                 <AnimatePresence>
                                   {groupedMatchesByTime.map(([time, slotMatches], idx) => (
                                     <div key={time} className={`flex flex-col ${isPauseTime(time) ? 'print-pause-row' : ''}`}>
+                                      {shouldRenderGeneralBreakBeforeIndex(idx) && (
+                                        <div
+                                          className="self-start flex shrink-0 border-y border-amber-300 bg-amber-100/80 text-[9px] md:text-[11px] font-black uppercase tracking-wider text-amber-700 no-print"
+                                        >
+                                          <div className="w-[60px] md:w-[120px] shrink-0 border-r border-amber-300" />
+                                          <div className="relative flex shrink-0">
+                                            {config.courtConfigs.map((cc, breakIdx) => (
+                                              <div
+                                                key={`break-${cc.id}`}
+                                                className={`w-[130px] md:w-[180px] shrink-0 py-1.5 md:py-2 ${breakIdx < config.courtConfigs.length - 1 ? 'border-r border-amber-300' : ''}`}
+                                              >
+                                                
+                                              </div>
+                                            ))}
+                                            <div className="absolute inset-0 flex items-center justify-center text-center px-2">
+                                              Descanso General {config.generalBreakTime} - {generalBreakEndLabel}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
                                       <div 
                                         className={`flex border-b border-white/20 min-h-[40px] md:min-h-[90px] short-compact ${isPauseTime(time) ? 'print-pause-row' : ''}`}
                                         style={{ minWidth: `calc(60px + ${config.courtConfigs.length * 130}px)` }}
@@ -1513,8 +1598,13 @@ export default function App() {
                           </div>
                         ) : (
                           <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
-                            {groupedMatchesByTime.map(([time, slotMatches]) => (
+                            {groupedMatchesByTime.map(([time, slotMatches], idx) => (
                               <div key={time} className="border-b border-slate-100">
+                                {shouldRenderGeneralBreakBeforeIndex(idx) && (
+                                  <div className="bg-amber-50 border-y border-amber-200 px-4 md:px-8 py-1.5 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-amber-700 no-print">
+                                    Descanso General {config.generalBreakTime} - {generalBreakEndLabel}
+                                  </div>
+                                )}
                                  <div className="bg-slate-50 px-4 md:px-8 py-1 md:py-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] md:sticky md:top-0 md:z-10">{time}</div>
                                 <div className="divide-y divide-slate-50 md:min-w-min md:overflow-x-auto">
                                   {slotMatches.map(m => {
@@ -1661,9 +1751,11 @@ export default function App() {
               setAppCategories={setAppCategories}
               teamsByCategory={teamsByCategory}
               setTeamsByCategory={setTeamsByCategory}
+              config={config}
+              setConfig={setConfig}
               initialCategories={INITIAL_CATEGORIES}
               onRenameTeam={renameTeam}
-              isLocked={isLocked}
+              isLocked={isLocked || hasScores}
             />
           ) : (
             <CourtsManagementView 

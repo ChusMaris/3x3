@@ -61,6 +61,7 @@ export function createDefaultScheduleConfig(): ScheduleConfig {
     generalBreakTime: '11:30',
     generalBreakDuration: 15,
     useFillPhase: false,
-    playoffThreshold: 6
+    playoffThreshold: 6,
+    categoryConfig: {}
   };
 }

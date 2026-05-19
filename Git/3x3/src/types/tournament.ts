@@ -5,6 +5,7 @@ export interface TournamentData {
   config: ScheduleConfig;
   teamInput: string;
   teamsByCategory?: Record<string, string[]>;
+  appCategories?: string[];
   isLocked?: boolean;
 }
 

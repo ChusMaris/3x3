@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { Filter, Lock, Pencil, Plus, Trash2, Users, Eraser } from 'lucide-react';
 import { motion } from 'motion/react';
+import type { CategoryMatchType, ScheduleConfig } from '../lib/scheduler';
 
 interface TeamsManagementViewProps {
   appCategories: string[];
   setAppCategories: (cats: string[]) => void;
   teamsByCategory: Record<string, string[]>;
   setTeamsByCategory: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
+  config: ScheduleConfig;
+  setConfig: React.Dispatch<React.SetStateAction<ScheduleConfig>>;
   initialCategories: string[];
   onRenameTeam: (cat: string, oldName: string, newName: string) => void;
   isLocked: boolean;
@@ -17,6 +20,8 @@ export function TeamsManagementView({
   setAppCategories,
   teamsByCategory,
   setTeamsByCategory,
+  config,
+  setConfig,
   initialCategories,
   onRenameTeam,
   isLocked
@@ -29,6 +34,15 @@ export function TeamsManagementView({
   const addCategory = () => {
     if (newCatName && !appCategories.includes(newCatName)) {
       setAppCategories([...appCategories, newCatName]);
+      setConfig(prev => ({
+        ...prev,
+        categoryConfig: {
+          ...(prev.categoryConfig || {}),
+          [newCatName]: {
+            matchType: 'Liga'
+          }
+        }
+      }));
       setNewCatName('');
     }
   };
@@ -45,6 +59,45 @@ export function TeamsManagementView({
       delete next[cat];
       return next;
     });
+    setConfig(prev => {
+      const nextCategoryConfig = { ...(prev.categoryConfig || {}) };
+      delete nextCategoryConfig[cat];
+
+      const nextManualGroups = { ...(prev.manualGroups || {}) };
+      delete nextManualGroups[cat];
+
+      return {
+        ...prev,
+        categoryConfig: nextCategoryConfig,
+        manualGroups: nextManualGroups
+      };
+    });
+  };
+
+  const updateCategoryStartTime = (cat: string, startTime: string) => {
+    setConfig(prev => ({
+      ...prev,
+      categoryConfig: {
+        ...(prev.categoryConfig || {}),
+        [cat]: {
+          ...(prev.categoryConfig?.[cat] || {}),
+          startTime
+        }
+      }
+    }));
+  };
+
+  const updateCategoryMatchType = (cat: string, matchType: CategoryMatchType) => {
+    setConfig(prev => ({
+      ...prev,
+      categoryConfig: {
+        ...(prev.categoryConfig || {}),
+        [cat]: {
+          ...(prev.categoryConfig?.[cat] || {}),
+          matchType
+        }
+      }
+    }));
   };
 
   const addTeamToCategory = (cat: string) => {
@@ -199,6 +252,32 @@ export function TeamsManagementView({
                 </div>
 
                 <div className="p-4 md:p-6 space-y-3 md:space-y-4 flex-1 flex flex-col">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3 bg-slate-50 border border-slate-100 rounded-xl p-2.5 md:p-3">
+                    <div>
+                      <label className="text-[8px] md:text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-1">Inicio categoría</label>
+                      <input
+                        type="time"
+                        value={config.categoryConfig?.[cat]?.startTime || ''}
+                        disabled={isLocked}
+                        onChange={e => updateCategoryStartTime(cat, e.target.value)}
+                        className={`w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] md:text-xs font-black outline-none ${isLocked ? 'text-slate-400 cursor-not-allowed' : 'text-slate-700 focus:border-[#e94560]'}`}
+                      />
+                      <p className="text-[8px] font-bold text-slate-400 mt-1">Vacío = hereda {config.startTime}</p>
+                    </div>
+                    <div>
+                      <label className="text-[8px] md:text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-1">Tipo enfrentamiento</label>
+                      <select
+                        value={config.categoryConfig?.[cat]?.matchType || (((teamsByCategory[cat] || []).length < (config.playoffThreshold || 6)) ? 'Liga' : 'Playoffs')}
+                        disabled={isLocked}
+                        onChange={e => updateCategoryMatchType(cat, e.target.value as CategoryMatchType)}
+                        className={`w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] md:text-xs font-black outline-none ${isLocked ? 'text-slate-400 cursor-not-allowed' : 'text-slate-700 focus:border-[#e94560]'}`}
+                      >
+                        <option value="Liga">Liga</option>
+                        <option value="Playoffs">Playoffs</option>
+                      </select>
+                    </div>
+                  </div>
+
                   {!isLocked && (
                     <div className="flex gap-1.5 md:gap-2">
                       <input
