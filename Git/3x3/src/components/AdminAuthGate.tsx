@@ -105,6 +105,25 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
     authTrace('gate:authorization', { email, isAuthorized });
   }, [email, isAuthorized]);
 
+  useEffect(() => {
+    if (!email) return;
+    const hash = window.location.hash;
+    const hasOAuthParams =
+      hash.includes('access_token=') ||
+      hash.includes('refresh_token=') ||
+      hash.includes('expires_in=') ||
+      hash.includes('provider_token=') ||
+      hash.includes('supabase_route=');
+
+    if (!hasOAuthParams) return;
+
+    authTrace('gate:cleanup-auth-hash', { hash });
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/admin`);
+    sessionStorage.removeItem('supabase_oauth_route');
+    localStorage.removeItem('supabase_oauth_route');
+    localStorage.removeItem('supabase_admin_oauth_started_at');
+  }, [email]);
+
   if (!isSupabaseConfigured) {
     return (
       <div className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center px-6">
