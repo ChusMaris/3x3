@@ -4,13 +4,14 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import App from './App.tsx';
 import { AdminAuthGate } from './components/AdminAuthGate';
 import { PublicLivePage } from './components/PublicLivePage';
+import { supabase } from './lib/supabase';
 import './index.css';
 
 const authTrace = (step: string, payload?: Record<string, unknown>) => {
   console.info('[AUTH-TRACE]', step, payload || {});
 };
 
-const restoreSupabaseOAuthRoute = () => {
+const restoreSupabaseOAuthRoute = async () => {
   if (typeof window === 'undefined') return;
 
   const hash = window.location.hash;
@@ -101,6 +102,7 @@ const restoreSupabaseOAuthRoute = () => {
   if (hashRoute && oauthInHash && hashSuffix?.startsWith('#') && route) {
     const authFragment = hashSuffix.replace(/^#/, '');
     authTrace('restore:route-with-token-suffix', { route, hashSuffix, target: `#${route}?${authFragment}` });
+    await supabase.auth.getSession();
     window.location.hash = `#${route}?${authFragment}`;
     return;
   }
@@ -111,6 +113,7 @@ const restoreSupabaseOAuthRoute = () => {
   if (!hashRoute && oauthInHash && route) {
     const authFragment = hash.replace(/^#/, '');
     authTrace('restore:token-hash-to-route', { target: `#${route}?${authFragment}` });
+    await supabase.auth.getSession();
     window.location.hash = `#${route}?${authFragment}`;
     return;
   }
