@@ -12,6 +12,17 @@ const authTrace = (step: string, payload?: Record<string, unknown>) => {
   console.info('[AUTH-TRACE]', step, payload || {});
 };
 
+const ADMIN_CHECK_TIMEOUT_MS = 8000;
+
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  return await Promise.race<T>([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error('admin-check-timeout')), timeoutMs);
+    }),
+  ]);
+};
+
 const GoogleMark = () => (
   <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 48 48">
     <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.655 32.657 29.192 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.054 29.268 4 24 4C12.955 4 4 12.955 4 24s8.955 20 20 20s20-8.955 20-20c0-1.341-0.138-2.65-0.389-3.917z"/>
@@ -32,6 +43,18 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
   const [error, setError] = useState<string | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
 
+  const resolveAdminAuthorization = async () => {
+    try {
+      return await withTimeout(isAdmin(), ADMIN_CHECK_TIMEOUT_MS);
+    } catch (err) {
+      authTrace('gate:is-admin-timeout-or-error', {
+        message: err instanceof Error ? err.message : String(err),
+      });
+      setError('No se pudo validar los permisos de admin a tiempo. Reintenta en unos segundos.');
+      return false;
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
     authTrace('gate:mount', {
@@ -41,38 +64,47 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
     });
 
     const boot = async () => {
-      if (!isSupabaseConfigured) {
-        if (mounted) setIsLoading(false);
-        return;
-      }
+      try {
+        if (!isSupabaseConfigured) {
+          if (mounted) setIsAuthorized(false);
+          return;
+        }
 
-      const { data, error: sessionError } = await supabase.auth.getSession();
-      if (!mounted) return;
-
-      authTrace('gate:session', {
-        sessionEmail: data.session?.user?.email || null,
-        hasSession: Boolean(data.session),
-        sessionError: sessionError?.message || null,
-        hash: window.location.hash,
-        search: window.location.search,
-      });
-
-      if (sessionError) {
-        setError('No se pudo comprobar la sesión de administrador.');
-      }
-
-      const sessionEmail = data.session?.user?.email || null;
-      setEmail(sessionEmail);
-
-      if (sessionEmail) {
-        const authorized = await isAdmin();
+        const { data, error: sessionError } = await supabase.auth.getSession();
         if (!mounted) return;
-        setIsAuthorized(authorized);
-      } else {
-        setIsAuthorized(false);
-      }
 
-      setIsLoading(false);
+        authTrace('gate:session', {
+          sessionEmail: data.session?.user?.email || null,
+          hasSession: Boolean(data.session),
+          sessionError: sessionError?.message || null,
+          hash: window.location.hash,
+          search: window.location.search,
+        });
+
+        if (sessionError) {
+          setError('No se pudo comprobar la sesión de administrador.');
+        }
+
+        const sessionEmail = data.session?.user?.email || null;
+        setEmail(sessionEmail);
+
+        if (sessionEmail) {
+          const authorized = await resolveAdminAuthorization();
+          if (!mounted) return;
+          setIsAuthorized(authorized);
+        } else {
+          setIsAuthorized(false);
+        }
+      } catch (err) {
+        authTrace('gate:boot-error', { message: err instanceof Error ? err.message : String(err) });
+        if (mounted) {
+          setError('Se produjo un error comprobando la sesión admin.');
+          setEmail(null);
+          setIsAuthorized(false);
+        }
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
     };
 
     boot();
@@ -85,14 +117,23 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
         hash: window.location.hash,
         search: window.location.search,
       });
+      if (!mounted) return;
+
       setEmail(session?.user?.email || null);
-      if (session?.user?.email) {
-        const authorized = await isAdmin();
-        setIsAuthorized(authorized);
-      } else {
-        setIsAuthorized(false);
+      try {
+        if (session?.user?.email) {
+          const authorized = await resolveAdminAuthorization();
+          if (!mounted) return;
+          setIsAuthorized(authorized);
+        } else {
+          setIsAuthorized(false);
+        }
+      } catch (err) {
+        authTrace('gate:listener-error', { message: err instanceof Error ? err.message : String(err) });
+        if (mounted) setIsAuthorized(false);
+      } finally {
+        if (mounted) setIsLoading(false);
       }
-      setIsLoading(false);
     });
 
     return () => {
