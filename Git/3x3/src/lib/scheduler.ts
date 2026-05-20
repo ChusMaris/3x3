@@ -502,49 +502,30 @@ export function generateSchedule(teams: Team[], config: ScheduleConfig, initialM
             // No continue; deja que se intente programar partido justo tras la pausa
           }
 
-          // Get compatible categories for this court (from targetCategories)
-          const compatibleCategories = Array.from(
-            new Set(
-              phaseMatchups
-                .filter(m => isCourtCompatibleForCategory(m.category, court.allowedCategories, court.isSmallBasket))
-                .map(m => m.category)
-            )
-          ).sort((a, b) => {
-            const aStart = categoryStartTimes.get(a) || baseTime.getTime();
-            const bStart = categoryStartTimes.get(b) || baseTime.getTime();
-            return aStart - bStart;
-          });
-
-          // Find the earliest category that's active now
-          let earliestActiveCategory: string | null = null;
-          for (const cat of compatibleCategories) {
-            const catStart = categoryStartTimes.get(cat) || baseTime.getTime();
-            if (catStart <= court.nextAvailable) {
-              const catPending = phaseMatchups.filter(m => m.category === cat);
-              if (catPending.length > 0) {
-                earliestActiveCategory = cat;
-                break;
+          // Evaluate all compatible matchups and choose the fairest candidate.
+          let bestCandidate:
+            | {
+                matchup: Matchup;
+                canStart: number;
+                canEnd: number;
+                fairnessScore: number;
               }
-            }
-          }
+            | null = null;
 
-          if (!earliestActiveCategory) continue;
+          const compatibleMatchups = phaseMatchups.filter((m) =>
+            isCourtCompatibleForCategory(m.category, court.allowedCategories, court.isSmallBasket)
+          );
 
-          // Try to schedule from the earliest active category
-          const catMatchups = phaseMatchups.filter(m => m.category === earliestActiveCategory);
-          for (const m of catMatchups) {
-
+          for (const m of compatibleMatchups) {
             const aFree = teamNextAvailable.get(m.a) || 0;
             const bFree = teamNextAvailable.get(m.b) || 0;
-            const catStart = categoryStartTimes.get(earliestActiveCategory) || baseTime.getTime();
-            let canStartRaw = Math.max(aFree, bFree, court.nextAvailable, catStart);
+            const catStart = categoryStartTimes.get(m.category) || baseTime.getTime();
+            const canStartRaw = Math.max(aFree, bFree, court.nextAvailable, catStart);
+
             // Si justo salimos de la pausa general, NO alinear a 15m, usa la hora exacta
-            let canStart;
-            if (court.nextAvailable === generalBreakEnd.getTime()) {
-              canStart = canStartRaw;
-            } else {
-              canStart = alignTo15(canStartRaw, 'up');
-            }
+            const canStart = court.nextAvailable === generalBreakEnd.getTime()
+              ? canStartRaw
+              : alignTo15(canStartRaw, 'up');
             const canEnd = canStart + config.gameDuration * 60000;
 
             if (canEnd > finalEndTime.getTime()) continue;
@@ -554,6 +535,39 @@ export function generateSchedule(teams: Team[], config: ScheduleConfig, initialM
 
             // Collision with already scheduled playoffs
             if (isSlotOccupied(court.id, canStart, canEnd, 5 * 60000)) continue;
+
+            const gamesA = teamGamesCount.get(m.a) || 0;
+            const gamesB = teamGamesCount.get(m.b) || 0;
+            const debutBonus = (gamesA === 0 ? 8 : 0) + (gamesB === 0 ? 8 : 0);
+            const lowGamesBonus = -((gamesA + gamesB) * 2);
+            const imbalancePenalty = -Math.abs(gamesA - gamesB);
+            const rematchPenalty = (lastOpponent.get(m.a) === m.b || lastOpponent.get(m.b) === m.a) ? -6 : 0;
+
+            // Extra reward when both teams have had enough rest since their availability edge.
+            const restSlackA = Math.max(0, canStart - aFree);
+            const restSlackB = Math.max(0, canStart - bFree);
+            const restBonus = Math.min(4, Math.floor(Math.min(restSlackA, restSlackB) / (15 * 60000)));
+
+            const fairnessScore = debutBonus + lowGamesBonus + imbalancePenalty + rematchPenalty + restBonus;
+
+            if (!bestCandidate) {
+              bestCandidate = { matchup: m, canStart, canEnd, fairnessScore };
+              continue;
+            }
+
+            // Primary key: earliest start time. Secondary key: fairness score.
+            if (
+              canStart < bestCandidate.canStart ||
+              (canStart === bestCandidate.canStart && fairnessScore > bestCandidate.fairnessScore)
+            ) {
+              bestCandidate = { matchup: m, canStart, canEnd, fairnessScore };
+            }
+          }
+
+          if (bestCandidate) {
+            const m = bestCandidate.matchup;
+            const canStart = bestCandidate.canStart;
+            const canEnd = bestCandidate.canEnd;
 
             // Schedule this match
             matches.push({
@@ -567,19 +581,20 @@ export function generateSchedule(teams: Team[], config: ScheduleConfig, initialM
               court: court.id
             });
 
-            const teamNextAvailableTime = alignTo15(canStart + 15 * 60000, 'up');
+            const teamNextAvailableTime = alignTo15(canEnd + config.breakDuration * 60000, 'up');
             court.nextAvailable = teamNextAvailableTime;
             teamNextAvailable.set(m.a, teamNextAvailableTime);
             teamNextAvailable.set(m.b, teamNextAvailableTime);
             teamGamesCount.set(m.a, (teamGamesCount.get(m.a) || 0) + 1);
             teamGamesCount.set(m.b, (teamGamesCount.get(m.b) || 0) + 1);
+            lastOpponent.set(m.a, m.b);
+            lastOpponent.set(m.b, m.a);
 
             // Remove from pending
             const idx = phaseMatchups.indexOf(m);
             if (idx !== -1) phaseMatchups.splice(idx, 1);
 
             matchFound = true;
-            break;
           }
 
           if (matchFound) break;

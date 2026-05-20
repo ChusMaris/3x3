@@ -69,6 +69,63 @@ body {
     font-size: 11pt !important;
   }
 
+  .qr-print-sheet {
+    display: flex !important;
+    min-height: 100vh !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 16mm !important;
+    background: #ffffff !important;
+  }
+
+  .qr-print-card {
+    width: 100% !important;
+    max-width: 96mm !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 8mm !important;
+    padding: 12mm !important;
+    border: 2px solid #e2e8f0 !important;
+    border-radius: 18px !important;
+    box-shadow: none !important;
+    color: #0f172a !important;
+    background: #ffffff !important;
+  }
+
+  .qr-print-kicker {
+    margin: 0 !important;
+    font-size: 10pt !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.28em !important;
+    text-transform: uppercase !important;
+    color: #e94560 !important;
+  }
+
+  .qr-print-card h2 {
+    margin: 0 !important;
+    text-align: center !important;
+    font-size: 22pt !important;
+    line-height: 1.05 !important;
+    font-weight: 900 !important;
+  }
+
+  .qr-print-subtitle {
+    margin: 0 !important;
+    text-align: center !important;
+    font-size: 11pt !important;
+    color: #475569 !important;
+  }
+
+  .qr-print-url {
+    margin: 0 !important;
+    text-align: center !important;
+    font-family: var(--font-mono) !important;
+    font-size: 9pt !important;
+    color: #334155 !important;
+    word-break: break-all !important;
+  }
+
   h2.print\:text-lg {
     font-size: 18pt !important;
     color: #000 !important;
@@ -79,6 +136,10 @@ body {
     display: block !important;
     overflow: visible !important;
     height: auto !important;
+  }
+
+  .qr-mode > :not(.qr-print-sheet) {
+    display: none !important;
   }
 
   /* Professional Print Styles - Scoped to Print */
@@ -226,6 +287,10 @@ body {
 }
 
 .print-only {
+  display: none;
+}
+
+.qr-print-sheet {
   display: none;
 }
 

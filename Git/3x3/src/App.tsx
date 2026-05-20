@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Trophy, 
   Settings, 
@@ -27,11 +27,15 @@ import {
   Circle,
   CheckCircle2,
   Info,
-  Printer
+  Printer,
+  LogOut,
+  Eye,
+  QrCode
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { generateSchedule, parseTeams, Team, Match, ScheduleConfig, formatTime, CategoryMatchType } from './lib/scheduler';
-import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { supabase, isSupabaseConfigured, signOutAdmin } from './lib/supabase';
 import { TeamsManagementView } from './components/TeamsManagementView';
 import { CourtsManagementView } from './components/CourtsManagementView';
 import { ClassificationTable } from './components/ClassificationTable';
@@ -50,6 +54,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [eventDate, setEventDate] = useState('');
 
   const [appCategories, setAppCategories] = useState<string[]>(INITIAL_CATEGORIES);
 
@@ -76,6 +81,33 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<string | null>(null);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const qrCodePreviewRef = useRef<HTMLDivElement | null>(null);
+  const qrCodeCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scoreSyncTimeoutRef = useRef<number | null>(null);
+  const eventDatePickerRef = useRef<HTMLInputElement | null>(null);
+
+  const formatEventDateDisplay = (isoDate: string) => {
+    if (!isoDate) return 'DD/MM/YYYY';
+    const [year, month, day] = isoDate.split('-');
+    if (!year || !month || !day) return 'DD/MM/YYYY';
+    return `${day}/${month}/${year}`;
+  };
+
+  const openEventDatePicker = () => {
+    if (isLocked) return;
+    const picker = eventDatePickerRef.current;
+    if (!picker) return;
+
+    const pickerWithShow = picker as HTMLInputElement & { showPicker?: () => void };
+    if (typeof pickerWithShow.showPicker === 'function') {
+      pickerWithShow.showPicker();
+      return;
+    }
+
+    picker.focus();
+    picker.click();
+  };
 
   const teams = useMemo(() => {
     const list: Team[] = [];
@@ -121,7 +153,7 @@ export default function App() {
     // Si desactivamos, quitamos SOLAMENTE los partidos de relleno extra
     let baseMatches = matches;
     if (!nextVal) {
-      baseMatches = matches.filter(m => 
+      baseMatches = matches.filter((m: Match) => 
         m.phase !== 'Fase Relleno' && 
         !m.id.startsWith('FILL-')
       );
@@ -209,6 +241,7 @@ export default function App() {
     
     setMatches(restoredMatches);
     setIsLocked(t.data.isLocked || false);
+    setEventDate(t.event_date || '');
 
     // Migration logic for old configs
     let courtConfigs = (t.data.config as any).courtConfigs;
@@ -278,14 +311,14 @@ export default function App() {
 
       const { error } = await supabase
         .from('tournaments')
-        .update({ data: updatedData, updated_at: new Date().toISOString() })
+        .update({ data: updatedData, event_date: eventDate, updated_at: new Date().toISOString() })
         .eq('id', currentTournament.id);
 
       if (error) throw error;
       
       // Update local cache
-      const updatedTournament = { ...currentTournament, data: updatedData };
-      setTournaments(prev => prev.map(t => t.id === currentTournament.id ? updatedTournament : t));
+      const updatedTournament = { ...currentTournament, event_date: eventDate, data: updatedData };
+      setTournaments((prev: Tournament[]) => prev.map((t: Tournament) => t.id === currentTournament.id ? updatedTournament : t));
       setCurrentTournament(updatedTournament);
     } catch (e) {
       console.error("Error saving tournament:", e);
@@ -330,7 +363,7 @@ export default function App() {
 
       if (error) throw error;
       
-      setTournaments(prev => [data, ...prev]);
+      setTournaments((prev: Tournament[]) => [data, ...prev]);
       handleSelectTournament(data);
     } catch (e) {
       console.error("Error creating tournament:", e);
@@ -349,7 +382,7 @@ export default function App() {
         .eq('id', id);
 
       if (error) throw error;
-      setTournaments(prev => prev.filter(t => t.id !== id));
+      setTournaments((prev: Tournament[]) => prev.filter((t: Tournament) => t.id !== id));
       if (currentTournament?.id === id) setCurrentTournament(null);
     } catch (e) {
       console.error("Error deleting tournament:", e);
@@ -365,11 +398,11 @@ export default function App() {
   const teamNames = useMemo(() => {
     let filteredTeams = teams;
     if (filterCats.length > 0) {
-      filteredTeams = teams.filter(t => filterCats.includes(t.category));
+      filteredTeams = teams.filter((t: Team) => filterCats.includes(t.category));
     }
     // Convert to objects with name and category to show in dropdown
-    const uniqueTeams = Array.from(new Set(filteredTeams.map(t => t.name))).map(name => {
-      return filteredTeams.find(t => t.name === name);
+    const uniqueTeams = Array.from(new Set(filteredTeams.map((t: Team) => t.name))).map((name: string) => {
+      return filteredTeams.find((t: Team) => t.name === name);
     }).filter(Boolean);
 
     // Sort by category first, then by name
@@ -524,7 +557,52 @@ export default function App() {
   };
 
   const updateScore = (matchId: string, t1: number | undefined, t2: number | undefined) => {
-    setMatches(prev => prev.map(m => m.id === matchId ? { ...m, score1: t1, score2: t2 } : m));
+    setMatches(prev => {
+      const nextMatches = prev.map(m => m.id === matchId ? { ...m, score1: t1, score2: t2 } : m);
+
+      // Auto-sync scores to Supabase so live view reflects updates without requiring manual save.
+      if (isSupabaseConfigured && currentTournament) {
+        if (scoreSyncTimeoutRef.current !== null) {
+          window.clearTimeout(scoreSyncTimeoutRef.current);
+        }
+
+        scoreSyncTimeoutRef.current = window.setTimeout(async () => {
+          try {
+            const updatedData = {
+              ...currentTournament.data,
+              matches: nextMatches,
+              config,
+              teamInput,
+              teamsByCategory,
+              appCategories,
+              isLocked,
+            };
+
+            const { error: syncError } = await supabase
+              .from('tournaments')
+              .update({ data: updatedData, updated_at: new Date().toISOString() })
+              .eq('id', currentTournament.id);
+
+            if (syncError) throw syncError;
+
+            setTournaments((prevTournaments) => prevTournaments.map((t) => (
+              t.id === currentTournament.id
+                ? { ...t, data: updatedData }
+                : t
+            )));
+            setCurrentTournament((prevTournament) => (
+              prevTournament && prevTournament.id === currentTournament.id
+                ? { ...prevTournament, data: updatedData }
+                : prevTournament
+            ));
+          } catch (syncErr) {
+            console.error('Error auto-syncing scores:', syncErr);
+          }
+        }, 800);
+      }
+
+      return nextMatches;
+    });
   };
 
   const renameTeam = (cat: string, oldName: string, newName: string) => {
@@ -814,6 +892,158 @@ export default function App() {
     }
   };
 
+  const handleLogout = async () => {
+    await signOutAdmin();
+    window.location.href = `${window.location.origin}${window.location.pathname}#/admin`;
+  };
+
+  const isCurrentTournamentActive = useMemo(() => {
+    if (!currentTournament?.event_date) return false;
+    const today = new Date();
+    const eventDate = new Date(currentTournament.event_date);
+    // Ignora la hora, compara solo año-mes-día
+    return (
+      eventDate.getFullYear() > today.getFullYear() ||
+      (eventDate.getFullYear() === today.getFullYear() && eventDate.getMonth() > today.getMonth()) ||
+      (eventDate.getFullYear() === today.getFullYear() && eventDate.getMonth() === today.getMonth() && eventDate.getDate() >= today.getDate())
+    );
+  }, [currentTournament]);
+
+  const currentTournamentLiveUrl = useMemo(() => {
+    if (!currentTournament || typeof window === 'undefined') return '';
+    const baseUrl = window.location.href.split('#')[0];
+    return `${baseUrl}#/live/${currentTournament.id}`;
+  }, [currentTournament]);
+
+  const openQrModal = () => {
+    const payload = {
+      tournamentId: currentTournament?.id,
+      tournamentName: currentTournament?.name,
+      liveUrl: currentTournamentLiveUrl,
+      active: isCurrentTournamentActive,
+    };
+    console.info('[QR-TRACE] open', payload);
+    setIsQrModalOpen(true);
+  };
+
+  const printQrSheet = () => {
+    const qrSvg = qrCodePreviewRef.current?.querySelector('svg');
+    const qrCanvas = qrCodeCanvasRef.current;
+    console.info('[QR-TRACE] print', {
+      tournamentId: currentTournament?.id,
+      liveUrl: currentTournamentLiveUrl,
+      modalOpen: isQrModalOpen,
+      hasSvg: Boolean(qrSvg),
+      hasCanvas: Boolean(qrCanvas),
+    });
+
+    if (!currentTournament || !currentTournamentLiveUrl || !qrCanvas || typeof window === 'undefined') {
+      console.warn('[QR-TRACE] print-fallback', { reason: 'missing-data-or-canvas' });
+      handlePrint();
+      return;
+    }
+
+    let qrDataUrl: string;
+    try {
+      qrDataUrl = qrCanvas.toDataURL('image/png');
+    } catch (err) {
+      console.error('[QR-TRACE] canvas-to-dataurl-error', err);
+      handlePrint();
+      return;
+    }
+
+    const html = `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>QR vivo - ${currentTournament.name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
+  <style>
+    @page { size: portrait; margin: 12mm; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #0f172a; font-family: Inter, Arial, sans-serif; }
+    body { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .sheet { width: 96mm; max-width: 96mm; padding: 12mm; border: 2px solid #e2e8f0; border-radius: 18px; display: flex; flex-direction: column; align-items: center; gap: 8mm; box-sizing: border-box; }
+    .kicker { margin: 0; font-size: 10pt; font-weight: 900; letter-spacing: .28em; text-transform: uppercase; color: #e94560; }
+    h1 { margin: 0; text-align: center; font-size: 22pt; line-height: 1.05; font-weight: 900; font-style: italic; }
+    .subtitle { margin: 0; text-align: center; font-size: 11pt; color: #475569; }
+    .qr-wrap { padding: 4mm; border: 1px solid #e2e8f0; border-radius: 12px; }
+    .qr-img { display: block; width: 72mm; height: 72mm; }
+    .url { margin: 0; text-align: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9pt; color: #334155; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <p class="kicker">QR vivo</p>
+    <h1>${currentTournament.name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h1>
+    <p class="subtitle">Escanea para abrir la vista pública</p>
+    <div class="qr-wrap"><img class="qr-img" src="${qrDataUrl}" alt="QR vivo" /></div>
+    <p class="url">${currentTournamentLiveUrl}</p>
+  </div>
+</body>
+</html>`;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.setAttribute('aria-hidden', 'true');
+
+    const cleanup = () => {
+      window.removeEventListener('afterprint', cleanup);
+      iframe.remove();
+    };
+
+    iframe.onload = () => {
+      const printDoc = iframe.contentWindow?.document;
+      const printWin = iframe.contentWindow;
+      if (!printDoc || !printWin) {
+        console.error('[QR-TRACE] iframe-missing-window');
+        cleanup();
+        handlePrint();
+        return;
+      }
+
+      console.info('[QR-TRACE] print-iframe-ready', {
+        tournamentId: currentTournament.id,
+        readyState: printDoc.readyState,
+      });
+
+      const runPrint = () => {
+        try {
+          printWin.focus();
+          printWin.print();
+          window.addEventListener('afterprint', cleanup, { once: true });
+        } catch (err) {
+          console.error('[QR-TRACE] iframe-print-error', err);
+          cleanup();
+          handlePrint();
+        }
+      };
+
+      if (printDoc.readyState === 'complete') {
+        setTimeout(runPrint, 300);
+      } else {
+        printWin.addEventListener('load', () => setTimeout(runPrint, 300), { once: true });
+      }
+    };
+
+    document.body.appendChild(iframe);
+    const printDoc = iframe.contentWindow?.document;
+    if (!printDoc) {
+      console.error('[QR-TRACE] iframe-document-missing');
+      iframe.remove();
+      handlePrint();
+      return;
+    }
+
+    printDoc.open();
+    printDoc.write(html);
+    printDoc.close();
+  };
+
   if (!currentTournament) {
     return (
       <LandingPage 
@@ -821,13 +1051,14 @@ export default function App() {
         onSelect={handleSelectTournament} 
         onCreate={createTournament} 
         onDelete={deleteTournament}
+        onLogout={handleLogout}
         isLoading={isLoading}
       />
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 font-sans text-slate-900">
+    <div className={`flex flex-col h-screen bg-slate-50 font-sans text-slate-900 ${isQrModalOpen ? 'qr-mode' : ''}`}>
       {/* Top Header */}
       <header className="bg-[#1a1a2e] text-white py-1 md:py-3 px-4 md:px-8 border-b-2 md:border-b-4 border-[#e94560] flex items-center justify-between shadow-xl shrink-0 gap-2 md:gap-4 relative z-[100] transition-all short-compact">
         <div className="flex items-center gap-2 md:gap-4">
@@ -893,6 +1124,18 @@ export default function App() {
               <ListOrdered className="w-3.5 h-3.5 md:w-4 md:h-4" /> <span className="hidden xs:inline">TABLA</span>
             </button>
           </div>
+
+          {isCurrentTournamentActive && (
+            <a 
+              href={`/#/live/${currentTournament.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-[7px] md:text-[10px] font-black text-[#22d3ee] bg-[#22d3ee]/10 border border-[#22d3ee]/30 hover:bg-[#22d3ee]/20 transition flex items-center gap-1 shrink-0"
+              title="Abrir vista pública en nueva pestaña"
+            >
+              <Eye className="w-3.5 h-3.5 md:w-4 md:h-4" /> <span className="hidden sm:inline">VIVO</span>
+            </a>
+          )}
           
           <div className="hidden xl:flex items-center gap-4 border-l border-slate-700 pl-4">
             <div className="text-right">
@@ -959,7 +1202,7 @@ export default function App() {
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 col-span-1">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Resumen Pistas</label>
                   <div className="flex items-center justify-between">
@@ -1004,6 +1247,38 @@ export default function App() {
                     }} 
                     className={`w-full bg-transparent font-mono font-black text-lg outline-none appearance-auto ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 sm:col-span-2">
+                  <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Fecha del Torneo</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={formatEventDateDisplay(eventDate)}
+                      readOnly
+                      aria-label="Fecha del torneo en formato DD/MM/YYYY"
+                      className={`w-full bg-transparent font-mono text-sm md:text-base font-bold pr-9 outline-none ${(isLocked) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900 cursor-pointer'}`}
+                      onClick={openEventDatePicker}
+                    />
+                    <button
+                      type="button"
+                      onClick={openEventDatePicker}
+                      disabled={isLocked}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 disabled:text-slate-300 disabled:cursor-not-allowed"
+                      aria-label="Abrir selector de fecha"
+                    >
+                      <Calendar className="w-4 h-4" />
+                    </button>
+                    <input
+                      ref={eventDatePickerRef}
+                      type="date"
+                      value={eventDate}
+                      disabled={isLocked}
+                      onChange={e => setEventDate(e.target.value)}
+                      className="sr-only"
+                      tabIndex={-1}
+                      aria-hidden="true"
+                    />
+                  </div>
                 </div>
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Inicio</label>
@@ -1130,6 +1405,15 @@ export default function App() {
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{error}</span>
               </div>
+            )}
+            {isCurrentTournamentActive && (
+              <button
+                onClick={openQrModal}
+                className="w-full mb-3 py-3 rounded-xl font-black text-[10px] uppercase tracking-[0.22em] transition-all bg-[#22d3ee] text-slate-950 hover:bg-[#67e8f9] shadow-lg flex items-center justify-center gap-2"
+              >
+                <QrCode className="w-4 h-4" />
+                Generar QR vivo
+              </button>
             )}
             <button 
               onClick={handleGenerate}
@@ -1262,7 +1546,7 @@ export default function App() {
                                       <button
                                         key={cat}
                                         onClick={() => setFilterCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])}
-                                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left text-[10px] md:text-[11px] font-bold transition-all ${isSelected ? 'bg-[#e94560]/10 text-[#e94560]' : 'text-slate-600 hover:bg-slate-50'}`}
+                                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left transition-all ${isSelected ? 'bg-[#e94560]/10 text-[#e94560]' : 'text-slate-600 hover:bg-slate-50'}`}
                                       >
                                         {cat}
                                         {isSelected ? <CheckCircle2 className="w-3.5 h-3.5 text-[#e94560]" /> : <Circle className="w-3.5 h-3.5 text-slate-200" />}
@@ -1366,7 +1650,6 @@ export default function App() {
                                    {Object.entries(catData.groups as Record<string, any[]>).map(([letter, groupTeams]) => (
                                      <div 
                                        key={letter} 
-                                       className="space-y-2 md:space-y-4"
                                      onDragOver={(e) => {
                                         e.preventDefault();
                                         e.dataTransfer.dropEffect = "move";
@@ -1427,10 +1710,10 @@ export default function App() {
                     </div>
                   ) : (
                     (viewMode === 'grid' || viewMode === 'calendar') ? (
-                      <div className="flex-1 flex flex-col overflow-hidden">
+                      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
                         
                         {viewMode === 'grid' ? (
-                          <div className="flex-1 overflow-auto bg-slate-300/50 custom-scrollbar">
+                          <div className="flex-1 min-h-0 overflow-auto bg-slate-300/50 custom-scrollbar">
                             <div className="min-w-max flex flex-col">
                               {/* Sticky Header now inside the scrollable area */}
                               <div 
@@ -1597,7 +1880,7 @@ export default function App() {
                             </div>
                           </div>
                         ) : (
-                          <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
+                          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar bg-white">
                             {groupedMatchesByTime.map(([time, slotMatches], idx) => (
                               <div key={time} className="border-b border-slate-100">
                                 {shouldRenderGeneralBreakBeforeIndex(idx) && (
@@ -1779,6 +2062,100 @@ export default function App() {
         </div>
         <div></div>
       </footer>
+
+      <AnimatePresence>
+        {isQrModalOpen && currentTournament && (
+          <div className="fixed inset-0 z-[180] flex items-center justify-center p-4 no-print">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+              onClick={() => {
+                console.info('[QR-TRACE] close-overlay', { tournamentId: currentTournament.id });
+                setIsQrModalOpen(false);
+              }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              className="relative z-10 w-full max-w-md rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden"
+            >
+              <div className="bg-[#1a1a2e] text-white px-6 py-5 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22d3ee]">QR vivo</p>
+                  <h3 className="text-xl font-black italic mt-1">{currentTournament.name}</h3>
+                </div>
+                <button
+                  onClick={() => {
+                    console.info('[QR-TRACE] close-button', { tournamentId: currentTournament.id });
+                    setIsQrModalOpen(false);
+                  }}
+                  className="p-2 rounded-full hover:bg-white/10 transition-colors"
+                  title="Cerrar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5 text-center">
+                <div ref={qrCodePreviewRef} className="inline-flex p-4 bg-white rounded-3xl border border-slate-100 shadow-lg">
+                  <QRCodeSVG value={currentTournamentLiveUrl} size={240} level="M" includeMargin />
+                </div>
+                <div className="sr-only">
+                  <QRCodeCanvas ref={qrCodeCanvasRef} value={currentTournamentLiveUrl} size={240} level="M" includeMargin />
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Dirección pública</p>
+                  <p className="text-xs font-mono text-slate-600 break-all">{currentTournamentLiveUrl}</p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={printQrSheet}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#e94560] px-4 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-white hover:bg-[#cf3d56] transition"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Imprimir QR
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.info('[QR-TRACE] close-secondary', { tournamentId: currentTournament.id });
+                      setIsQrModalOpen(false);
+                    }}
+                    className="rounded-xl border border-slate-200 px-4 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 hover:bg-slate-50 transition"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {isQrModalOpen && currentTournament && (
+        <div className="qr-print-sheet">
+          <div className="flex flex-col items-center text-center gap-6 p-10 bg-white text-slate-950 rounded-3xl shadow-2xl border border-slate-200">
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#e94560]">Torneo en directo</p>
+              <h2 className="text-3xl font-black italic tracking-tight">{currentTournament.name}</h2>
+              <p className="text-sm text-slate-500">Escanea el QR para abrir la vista pública del torneo</p>
+            </div>
+
+            <div className="p-4 bg-white rounded-3xl border-4 border-slate-100 shadow-[0_20px_60px_rgba(15,23,42,0.12)]">
+              <QRCodeSVG value={currentTournamentLiveUrl} size={280} level="M" includeMargin />
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">URL</p>
+              <p className="text-sm font-mono break-all text-slate-700 max-w-[34rem]">{currentTournamentLiveUrl}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Manual Match Modal */}
       <AnimatePresence>

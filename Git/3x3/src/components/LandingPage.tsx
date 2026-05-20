@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar, Loader2, Plus, Settings, Trash2, Trophy } from 'lucide-react';
+import { Calendar, Loader2, Plus, Settings, Trash2, Trophy, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { isSupabaseConfigured } from '../lib/supabase';
 import type { Tournament } from '../types/tournament';
@@ -9,10 +9,11 @@ interface LandingPageProps {
   onSelect: (t: Tournament) => void;
   onCreate: (name: string, date: string) => void;
   onDelete: (id: string) => void;
+  onLogout: () => Promise<void>;
   isLoading: boolean;
 }
 
-export function LandingPage({ tournaments, onSelect, onCreate, onDelete, isLoading }: LandingPageProps) {
+export function LandingPage({ tournaments, onSelect, onCreate, onDelete, onLogout, isLoading }: LandingPageProps) {
   const [newTournamentName, setNewTournamentName] = useState('');
   const [newTournamentDate, setNewTournamentDate] = useState(new Date().toISOString().split('T')[0]);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -51,16 +52,24 @@ export function LandingPage({ tournaments, onSelect, onCreate, onDelete, isLoadi
       </header>
 
       <main className="relative z-10 flex-1 max-w-6xl w-full mx-auto p-8 flex flex-col">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <h2 className="text-xl font-black uppercase tracking-widest text-[#e94560] italic">
             Torneos Guardados
           </h2>
-          <button
-            onClick={() => setShowCreateForm(!showCreateForm)}
-            className="flex items-center gap-2 bg-white text-[#1a1a2e] px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#e94560] hover:text-white transition-all shadow-xl active:scale-95"
-          >
-            {showCreateForm ? 'CANCELAR' : <><Plus className="w-4 h-4" /> NUEVO TORNEO</>}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              className="flex items-center gap-2 bg-white text-[#1a1a2e] px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#e94560] hover:text-white transition-all shadow-xl active:scale-95"
+            >
+              {showCreateForm ? 'CANCELAR' : <><Plus className="w-4 h-4" /> NUEVO TORNEO</>}
+            </button>
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-2 bg-slate-800 text-white px-5 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-700 transition-all shadow-xl active:scale-95"
+            >
+              <LogOut className="w-4 h-4" /> CERRAR SESIÓN
+            </button>
+          </div>
         </div>
 
         <AnimatePresence>
