@@ -87,10 +87,21 @@ export default function App() {
   const scoreSyncTimeoutRef = useRef<number | null>(null);
   const eventDatePickerRef = useRef<HTMLInputElement | null>(null);
 
+  const normalizeIsoDate = (value: string) => {
+    if (!value) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const formatEventDateDisplay = (isoDate: string) => {
-    if (!isoDate) return 'DD/MM/YYYY';
-    const [year, month, day] = isoDate.split('-');
-    if (!year || !month || !day) return 'DD/MM/YYYY';
+    const normalized = normalizeIsoDate(isoDate);
+    if (!normalized) return 'DD/MM/YYYY';
+    const [year, month, day] = normalized.split('-');
     return `${day}/${month}/${year}`;
   };
 
@@ -241,7 +252,7 @@ export default function App() {
     
     setMatches(restoredMatches);
     setIsLocked(t.data.isLocked || false);
-    setEventDate(t.event_date || '');
+    setEventDate(normalizeIsoDate(t.event_date || ''));
 
     // Migration logic for old configs
     let courtConfigs = (t.data.config as any).courtConfigs;
@@ -1175,31 +1186,31 @@ export default function App() {
 
         {/* Sidebar */}
         <aside className={`
-          fixed inset-y-0 left-0 z-[150] w-80 bg-white border-r border-slate-200 flex flex-col shadow-2xl shrink-0 transition-all duration-300 transform no-print
+          fixed inset-y-0 left-0 z-[150] w-[min(92vw,22rem)] sm:w-80 bg-white border-r border-slate-200 flex flex-col shadow-2xl shrink-0 transition-all duration-300 transform no-print
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:relative lg:translate-x-0 
           ${isSidebarVisible ? 'lg:flex lg:w-80' : 'lg:hidden lg:w-0'}
         `}>
-          <div className="flex items-center justify-between p-6 border-b border-slate-100 lg:border-b-0 lg:pb-0">
-            <div className="flex items-center gap-2 lg:hidden bg-[#1a1a2e] text-white p-4 md:p-6 -m-6 mb-0 w-full short-compact">
+          <div className="px-5 py-4 border-b border-slate-100 bg-white lg:bg-transparent lg:px-6 lg:pt-6 lg:pb-2">
+            <div className="flex items-center gap-2 rounded-xl bg-[#1a1a2e] text-white px-3 py-2.5 lg:bg-transparent lg:text-slate-700 lg:p-0">
               <Trophy className="w-4 h-4 md:w-5 md:h-5 text-[#e94560]" />
               <span className="font-black italic text-xs md:text-sm tracking-tighter">CONFIGURACIÓN</span>
-              <button onClick={() => setIsSidebarOpen(false)} className="ml-auto p-1.5 md:p-2 hover:bg-white/10 rounded-lg">
+              <button onClick={() => setIsSidebarOpen(false)} className="ml-auto p-1.5 hover:bg-white/10 rounded-lg lg:hidden" aria-label="Cerrar menú lateral">
                 <X className="w-4 h-4 md:w-5 md:h-5" />
               </button>
+              <button 
+                onClick={() => setIsSidebarVisible(false)}
+                className="hidden lg:flex ml-auto p-2 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors"
+                title="Ocultar menú"
+                aria-label="Ocultar menú lateral"
+              >
+                <ChevronRight className="w-5 h-5 rotate-180" />
+              </button>
             </div>
-            {/* Desktop hide button */}
-            <button 
-              onClick={() => setIsSidebarVisible(false)}
-              className="hidden lg:flex ml-auto p-2 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors"
-              title="Ocultar menú"
-            >
-              <ChevronRight className="w-5 h-5 rotate-180" />
-            </button>
           </div>
           <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-            <section>
-              <div className="flex items-center gap-2 mb-4">
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
                 <Settings className="w-4 h-4 text-[#e94560]" />
                 <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Ajustes del Torneo</h2>
                 {(isLocked || hasScores) && (
@@ -1209,27 +1220,31 @@ export default function App() {
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 col-span-1">
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                <div className="w-full min-w-0 bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Resumen Pistas</label>
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-black text-base text-slate-900">{config.courtConfigs.length} Pistas</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono font-black text-base text-slate-900 truncate">{config.courtConfigs.length} Pistas</span>
                     <button 
                       onClick={() => setTournamentView('courts')}
-                      className="text-[8px] font-black text-[#e94560] uppercase hover:underline"
+                      className="text-[8px] font-black text-[#e94560] uppercase hover:underline shrink-0"
                     >
                       Config
                     </button>
                   </div>
                 </div>
-                <div className="bg-[#1a1a2e] p-3 rounded-xl border border-white/5 col-span-1">
+                <div className="w-full min-w-0 bg-[#1a1a2e] p-3 rounded-xl border border-white/5">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Partidos Totales</label>
                   <div className="flex items-center gap-2">
                     <Trophy className="w-4 h-4 text-[#e94560]" />
                     <span className="font-mono font-black text-base text-white">{resolvedMatches.length}</span>
                   </div>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+              </div>
+
+              <div className="space-y-3">
+                <div className="w-full min-w-0 bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Juego (m)</label>
                   <input 
                     type="number" 
@@ -1239,10 +1254,11 @@ export default function App() {
                       const val = e.target.value;
                       setConfig(c => ({...c, gameDuration: val === '' ? undefined as any : Math.max(1, Number(val))}));
                     }} 
-                    className={`w-full bg-transparent font-mono font-black text-lg outline-none appearance-auto ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
+                    className={`w-full h-10 rounded-lg border border-slate-200 px-3 bg-white font-mono font-black text-lg leading-none outline-none appearance-auto ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+
+                <div className="w-full min-w-0 bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Descanso (m)</label>
                   <input 
                     type="number" 
@@ -1252,93 +1268,108 @@ export default function App() {
                       const val = e.target.value;
                       setConfig(c => ({...c, breakDuration: val === '' ? undefined as any : Math.max(0, Number(val))}));
                     }} 
-                    className={`w-full bg-transparent font-mono font-black text-lg outline-none appearance-auto ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
+                    className={`w-full h-10 rounded-lg border border-slate-200 px-3 bg-white font-mono font-black text-lg leading-none outline-none appearance-auto ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 sm:col-span-2">
+
+                <div className="w-full min-w-0 bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Fecha del Torneo</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={formatEventDateDisplay(eventDate)}
-                      readOnly
-                      aria-label="Fecha del torneo en formato DD/MM/YYYY"
-                      className={`w-full bg-transparent font-mono text-sm md:text-base font-bold pr-9 outline-none ${(isLocked) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900 cursor-pointer'}`}
-                      onClick={openEventDatePicker}
-                    />
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={openEventDatePicker}
                       disabled={isLocked}
-                      className="absolute right-0 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 disabled:text-slate-300 disabled:cursor-not-allowed"
+                      className={`flex-1 h-10 rounded-lg border border-slate-200 px-3 bg-white text-left font-mono text-sm font-bold outline-none ${isLocked ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900 cursor-pointer'}`}
+                      aria-label="Seleccionar fecha del torneo"
+                    >
+                      {formatEventDateDisplay(eventDate)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openEventDatePicker}
+                      disabled={isLocked}
+                      className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-700 disabled:text-slate-300 disabled:cursor-not-allowed"
                       aria-label="Abrir selector de fecha"
                     >
                       <Calendar className="w-4 h-4" />
                     </button>
-                    <input
-                      ref={eventDatePickerRef}
-                      type="date"
-                      value={eventDate}
-                      disabled={isLocked}
-                      onChange={e => setEventDate(e.target.value)}
-                      className="sr-only"
-                      tabIndex={-1}
-                      aria-hidden="true"
-                    />
                   </div>
+                  <input
+                    ref={eventDatePickerRef}
+                    type="date"
+                    value={eventDate}
+                    disabled={isLocked}
+                    onChange={e => setEventDate(e.target.value)}
+                    className="sr-only"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+
+                <div className="w-full min-w-0 bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Inicio</label>
                   <input 
                     type="time" 
                     value={config.startTime ?? "09:30"} 
                     disabled={isLocked || hasScores}
                     onChange={e => setConfig(c => ({...c, startTime: e.target.value}))} 
-                    className={`w-full bg-transparent font-mono font-black text-lg outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
+                    className={`w-full h-10 rounded-lg border border-slate-200 px-3 bg-white font-mono font-black text-lg leading-none outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+
+                <div className="w-full min-w-0 bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Pausa Gral</label>
                   <input 
                     type="time" 
                     value={config.generalBreakTime ?? "11:30"} 
                     disabled={isLocked || hasScores}
                     onChange={e => setConfig(c => ({...c, generalBreakTime: e.target.value}))} 
-                    className={`w-full bg-transparent font-mono font-black text-lg outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
+                    className={`w-full h-10 rounded-lg border border-slate-200 px-3 bg-white font-mono font-black text-lg leading-none outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+
+                <div className="w-full min-w-0 bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-[#e94560] uppercase block mb-1">Hora Fin</label>
                   <input 
                     type="time" 
                     value={config.endTime ?? "14:30"} 
                     disabled={isLocked || hasScores}
                     onChange={e => setConfig(c => ({...c, endTime: e.target.value}))} 
-                    className={`w-full bg-transparent font-mono font-black text-lg outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
+                    className={`w-full h-10 rounded-lg border border-slate-200 px-3 bg-white font-mono font-black text-lg leading-none outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+
+                <div className="w-full min-w-0 bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <label className="text-[9px] font-black text-[#e94560] uppercase block mb-1">Mín. Partidos</label>
                   <input 
-                    type="number" 
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="1"
                     value={config.minGamesPerTeam ?? ''} 
                     disabled={isLocked || hasScores}
                     onChange={e => {
-                      const val = e.target.value;
-                      setConfig(c => ({...c, minGamesPerTeam: val === '' ? undefined as any : Math.max(1, Number(val))}));
+                      const raw = e.target.value;
+                      const cleaned = raw.replace(/[^0-9]/g, '');
+                      if (cleaned === '') {
+                        setConfig(c => ({ ...c, minGamesPerTeam: undefined as any }));
+                        return;
+                      }
+                      setConfig(c => ({ ...c, minGamesPerTeam: Math.max(1, Number(cleaned)) }));
                     }} 
-                    className={`w-full bg-transparent font-mono font-black text-lg outline-none appearance-auto ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
+                    className={`w-full h-10 rounded-lg border border-slate-200 px-3 bg-white font-mono font-black text-lg leading-none outline-none ${(isLocked || hasScores) ? 'text-slate-400 cursor-not-allowed' : 'text-slate-900'}`} 
                   />
                 </div>
-                <div className="bg-slate-100 p-3 rounded-xl border border-slate-200 col-span-2 flex items-center justify-between">
-                  <div className="flex flex-col">
+
+                <div className="w-full min-w-0 bg-slate-100 p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
+                  <div className="flex flex-col min-w-0">
                     <label className="text-[10px] font-black text-[#e94560] uppercase block">Fase de Relleno</label>
                     <p className="text-[8px] font-bold text-slate-400 mt-0.5">Completa el calendario sin huecos</p>
                   </div>
                   <button
                     onClick={toggleFillPhase}
                     disabled={isLocked || hasScores}
-                    className={`flex items-center justify-center p-3 rounded-xl border-2 transition-all ${config.useFillPhase ? 'bg-[#e94560] border-[#e94560] text-white shadow-lg' : 'bg-white border-slate-300 text-slate-400'}`}
+                    className={`flex items-center justify-center p-3 rounded-xl border-2 transition-all shrink-0 ${config.useFillPhase ? 'bg-[#e94560] border-[#e94560] text-white shadow-lg' : 'bg-white border-slate-300 text-slate-400'}`}
                   >
                     {config.useFillPhase ? (
                       <LayoutGrid className="w-5 h-5" />

@@ -12,6 +12,9 @@ const authTrace = (step: string, payload?: Record<string, unknown>) => {
   console.info('[AUTH-TRACE]', step, payload || {});
 };
 
+// En modo desarrollo saltamos Supabase para poder probar la UI localmente
+const DEV_BYPASS = import.meta.env.DEV;
+
 const ADMIN_CHECK_TIMEOUT_MS = 8000;
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
@@ -164,6 +167,11 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
     localStorage.removeItem('supabase_oauth_route');
     localStorage.removeItem('supabase_admin_oauth_started_at');
   }, [email]);
+
+  // Bypass completo en modo desarrollo — no pasa por Supabase
+  if (DEV_BYPASS) {
+    return <>{children}</>;
+  }
 
   if (!isSupabaseConfigured) {
     return (

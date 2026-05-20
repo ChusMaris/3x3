@@ -304,3 +304,17 @@ body {
     min-height: 0 !important;
   }
 }
+
+/* Keep sidebar tournament settings stable on mobile/tablet widths.
+   Prevents 2-column overlap in narrow landscape viewport transitions. */
+@media (max-width: 1023px) {
+  .settings-grid {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .settings-grid > * {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
