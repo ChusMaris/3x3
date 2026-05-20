@@ -11,6 +11,36 @@ const authTrace = (step: string, payload?: Record<string, unknown>) => {
   console.info('[AUTH-TRACE]', step, payload || {});
 };
 
+const extractOAuthParamsFromLocation = () => {
+  if (typeof window === 'undefined') return new URLSearchParams();
+
+  const hash = window.location.hash || '';
+  const search = window.location.search || '';
+  const fromSearch = new URLSearchParams(search);
+  if (fromSearch.has('access_token') || fromSearch.has('refresh_token') || fromSearch.has('code')) {
+    return fromSearch;
+  }
+
+  const rawHash = hash.startsWith('#') ? hash.slice(1) : hash;
+  const hashCandidates = [rawHash];
+
+  const hashRouteMatch = hash.match(/^#(\/[^?#&]*)([?#].*|#.*)?$/);
+  const hashSuffix = hashRouteMatch?.[2] || '';
+  if (hashSuffix) {
+    hashCandidates.push(hashSuffix.replace(/^[?#]/, ''));
+  }
+
+  for (const candidate of hashCandidates) {
+    if (!candidate) continue;
+    const params = new URLSearchParams(candidate);
+    if (params.has('access_token') || params.has('refresh_token') || params.has('code')) {
+      return params;
+    }
+  }
+
+  return new URLSearchParams();
+};
+
 const restoreSupabaseOAuthRoute = async () => {
   if (typeof window === 'undefined') return;
 
@@ -57,6 +87,30 @@ const restoreSupabaseOAuthRoute = async () => {
     localStorage.removeItem('supabase_admin_oauth_started_at');
   };
 
+  const oauthParams = extractOAuthParamsFromLocation();
+  const accessToken = oauthParams.get('access_token');
+  const refreshToken = oauthParams.get('refresh_token');
+  if (accessToken && refreshToken) {
+    authTrace('restore:set-session-from-url:start', {
+      hasAccessToken: true,
+      hasRefreshToken: true,
+      route,
+    });
+    const { error: setSessionError } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    authTrace('restore:set-session-from-url:done', {
+      error: setSessionError?.message || null,
+    });
+
+    if (!setSessionError && route && window.location.hash !== `#${route}`) {
+      window.location.hash = `#${route}`;
+      clearStoredRoute();
+      return;
+    }
+  }
+
   if (storedRoute && oauthRecentlyStarted) {
     const restoreOnHashClear = () => {
       if (!window.location.hash) {
@@ -100,10 +154,8 @@ const restoreSupabaseOAuthRoute = async () => {
 
   // Some callbacks preserve the HashRouter route but append auth data after a second '#'.
   if (hashRoute && oauthInHash && hashSuffix?.startsWith('#') && route) {
-    const authFragment = hashSuffix.replace(/^#/, '');
-    authTrace('restore:route-with-token-suffix', { route, hashSuffix, target: `#${route}?${authFragment}` });
-    await supabase.auth.getSession();
-    window.location.hash = `#${route}?${authFragment}`;
+    authTrace('restore:route-with-token-suffix', { route, hashSuffix, target: `#${route}` });
+    window.location.hash = `#${route}`;
     return;
   }
 
@@ -111,10 +163,8 @@ const restoreSupabaseOAuthRoute = async () => {
   // with no HashRouter route, which would otherwise hit "*" and redirect to /live.
   // Keep auth params in the hash so Supabase can still consume them before we clean the URL.
   if (!hashRoute && oauthInHash && route) {
-    const authFragment = hash.replace(/^#/, '');
-    authTrace('restore:token-hash-to-route', { target: `#${route}?${authFragment}` });
-    await supabase.auth.getSession();
-    window.location.hash = `#${route}?${authFragment}`;
+    authTrace('restore:token-hash-to-route', { target: `#${route}` });
+    window.location.hash = `#${route}`;
     return;
   }
 
