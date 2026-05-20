@@ -97,6 +97,14 @@ const restoreSupabaseOAuthRoute = () => {
     return;
   }
 
+  // Some callbacks preserve the HashRouter route but append auth data after a second '#'.
+  if (hashRoute && oauthInHash && hashSuffix?.startsWith('#') && route) {
+    const authFragment = hashSuffix.replace(/^#/, '');
+    authTrace('restore:route-with-token-suffix', { route, hashSuffix, target: `#${route}?${authFragment}` });
+    window.location.hash = `#${route}?${authFragment}`;
+    return;
+  }
+
   // Some callbacks return a token-only hash (e.g. #access_token=...)
   // with no HashRouter route, which would otherwise hit "*" and redirect to /live.
   // Keep auth params in the hash so Supabase can still consume them before we clean the URL.
