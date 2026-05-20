@@ -177,24 +177,28 @@ const restoreSupabaseOAuthRoute = async () => {
   }
 };
 
-restoreSupabaseOAuthRoute();
+const bootstrap = async () => {
+  await restoreSupabaseOAuthRoute();
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <HashRouter>
-      <Routes>
-        <Route path="/live" element={<PublicLivePage />} />
-        <Route path="/live/:tournamentId" element={<PublicLivePage />} />
-        <Route
-          path="/admin"
-          element={(
-            <AdminAuthGate>
-              <App />
-            </AdminAuthGate>
-          )}
-        />
-        <Route path="*" element={<Navigate to="/live" replace />} />
-      </Routes>
-    </HashRouter>
-  </StrictMode>,
-);
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <HashRouter>
+        <Routes>
+          <Route path="/live" element={<PublicLivePage />} />
+          <Route path="/live/:tournamentId" element={<PublicLivePage />} />
+          <Route
+            path="/admin"
+            element={(
+              <AdminAuthGate>
+                <App />
+              </AdminAuthGate>
+            )}
+          />
+          <Route path="*" element={<Navigate to="/live" replace />} />
+        </Routes>
+      </HashRouter>
+    </StrictMode>,
+  );
+};
+
+void bootstrap();

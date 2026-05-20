@@ -909,11 +909,18 @@ export default function App() {
     );
   }, [currentTournament]);
 
+  const appBaseUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const rawBase = import.meta.env.BASE_URL || '/';
+    const normalizedBase = rawBase.startsWith('/') ? rawBase : `/${rawBase}`;
+    const withTrailingSlash = normalizedBase.endsWith('/') ? normalizedBase : `${normalizedBase}/`;
+    return `${window.location.origin}${withTrailingSlash}`;
+  }, []);
+
   const currentTournamentLiveUrl = useMemo(() => {
-    if (!currentTournament || typeof window === 'undefined') return '';
-    const baseUrl = window.location.href.split('#')[0];
-    return `${baseUrl}#/live/${currentTournament.id}`;
-  }, [currentTournament]);
+    if (!currentTournament || !appBaseUrl) return '';
+    return `${appBaseUrl}#/live/${currentTournament.id}`;
+  }, [currentTournament, appBaseUrl]);
 
   const openQrModal = () => {
     const payload = {
@@ -1127,7 +1134,7 @@ export default function App() {
 
           {isCurrentTournamentActive && (
             <a 
-              href={`/#/live/${currentTournament.id}`}
+              href={currentTournamentLiveUrl || '#'}
               target="_blank"
               rel="noopener noreferrer"
               className="px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-[7px] md:text-[10px] font-black text-[#22d3ee] bg-[#22d3ee]/10 border border-[#22d3ee]/30 hover:bg-[#22d3ee]/20 transition flex items-center gap-1 shrink-0"
