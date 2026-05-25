@@ -172,6 +172,9 @@ export function TeamsManagementView({
             {appCategories.map(cat => (
               <div key={cat} className="group relative bg-slate-100 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl flex items-center gap-2 md:gap-3 border border-slate-200 hover:border-[#e94560]/30 transition-all">
                 <span className="text-[10px] md:text-[11px] font-bold text-slate-700">{cat}</span>
+                <span className="inline-flex items-center justify-center min-w-6 px-1.5 py-0.5 rounded-full bg-white border border-slate-200 text-[9px] md:text-[10px] font-black text-slate-500">
+                  {teamsByCategory[cat]?.length || 0}
+                </span>
                 {!isLocked && (
                   <button
                     onClick={() => removeCategory(cat)}
