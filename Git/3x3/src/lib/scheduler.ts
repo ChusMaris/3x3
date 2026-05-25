@@ -7,6 +7,7 @@ export interface Team {
   id: string;
   name: string;
   category: string;
+  playerCount: number;
 }
 
 export interface Match {
@@ -73,11 +74,14 @@ export function parseTeams(input: string): Team[] {
     if (parts.length >= 2) {
       const category = parts[0];
       const name = parts[1];
+      const parsedCount = parts.length >= 3 ? Number(parts[2]) : 0;
+      const playerCount = Number.isFinite(parsedCount) ? parsedCount : 0;
       if (category.toLowerCase().includes('categor') || name.toLowerCase().includes('nombre')) return null;
       return {
         id: `team-${index}`,
         category,
-        name
+        name,
+        playerCount
       };
     }
     return null;

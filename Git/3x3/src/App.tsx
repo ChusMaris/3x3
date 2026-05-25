@@ -44,7 +44,7 @@ import { LandingPage } from './components/LandingPage';
 import { AddManualMatchForm } from './components/AddManualMatchForm';
 import { INITIAL_CATEGORIES, createDefaultScheduleConfig } from './constants/tournament';
 import { getCatStyles } from './utils/categoryStyles';
-import type { Tournament } from './types/tournament';
+import type { Tournament, TeamData } from './types/tournament';
 
 type ViewMode = 'calendar' | 'grid' | 'classification';
 
@@ -58,15 +58,15 @@ export default function App() {
 
   const [appCategories, setAppCategories] = useState<string[]>(INITIAL_CATEGORIES);
 
-  const [teamsByCategory, setTeamsByCategory] = useState<Record<string, string[]>>({});
+  const [teamsByCategory, setTeamsByCategory] = useState<Record<string, TeamData[]>>({});
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [tournamentView, setTournamentView] = useState<'matches' | 'teams' | 'courts'>('matches');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   
   const teamInput = useMemo(() => {
-    return (Object.entries(teamsByCategory) as [string, string[]][])
-      .map(([cat, tmList]) => tmList.map(name => `${cat},${name}`).join('\n'))
+    return (Object.entries(teamsByCategory) as [string, TeamData[]][])
+      .map(([cat, tmList]) => tmList.map(team => `${cat},${team.name},${team.playerCount}`).join('\n'))
       .filter(line => line !== '')
       .join('\n');
   }, [teamsByCategory]);
@@ -98,6 +98,31 @@ export default function App() {
     return `${year}-${month}-${day}`;
   };
 
+  const normalizeStoredTeamsByCategory = (raw: unknown): Record<string, TeamData[]> => {
+    if (!raw || typeof raw !== 'object') return {};
+    const next: Record<string, TeamData[]> = {};
+
+    Object.entries(raw as Record<string, unknown>).forEach(([cat, teamList]) => {
+      if (!Array.isArray(teamList)) return;
+      next[cat] = teamList
+        .map((item) => {
+          if (typeof item === 'string') {
+            return { name: item, playerCount: 0 };
+          }
+          if (typeof item === 'object' && item !== null) {
+            const source = item as Record<string, unknown>;
+            const name = typeof source.name === 'string' ? source.name : '';
+            const playerCount = Number.isFinite(source.playerCount as number) ? (source.playerCount as number) : 0;
+            return { name, playerCount };
+          }
+          return { name: '', playerCount: 0 };
+        })
+        .filter(team => Boolean(team.name));
+    });
+
+    return next;
+  };
+
   const formatEventDateDisplay = (isoDate: string) => {
     const normalized = normalizeIsoDate(isoDate);
     if (!normalized) return 'DD/MM/YYYY';
@@ -123,12 +148,13 @@ export default function App() {
   const teams = useMemo(() => {
     const list: Team[] = [];
     let idCounter = 0;
-    (Object.entries(teamsByCategory) as [string, string[]][]).forEach(([cat, names]) => {
-      names.forEach(name => {
+    (Object.entries(teamsByCategory) as [string, TeamData[]][]).forEach(([cat, teams]) => {
+      teams.forEach(team => {
         list.push({
           id: `team-${idCounter++}`,
           category: cat,
-          name: name
+          name: team.name,
+          playerCount: team.playerCount
         });
       });
     });
@@ -211,17 +237,16 @@ export default function App() {
     setCurrentTournament(t);
     
     // Legacy migration + loading
-    const teamsData = t.data.teamsByCategory as Record<string, string[]> | undefined;
-    let resolvedTeamsByCategory: Record<string, string[]> = {};
+    const teamsData = t.data.teamsByCategory;
+    let resolvedTeamsByCategory: Record<string, TeamData[]> = {};
     if (teamsData && Object.keys(teamsData).length > 0) {
-      resolvedTeamsByCategory = teamsData;
+      resolvedTeamsByCategory = normalizeStoredTeamsByCategory(teamsData);
     } else if (t.data.teamInput) {
-      // Parse legacy string input
       const parsed = parseTeams(t.data.teamInput);
-      const mig: Record<string, string[]> = {};
+      const mig: Record<string, TeamData[]> = {};
       parsed.forEach(team => {
         if (!mig[team.category]) mig[team.category] = [];
-        mig[team.category].push(team.name);
+        mig[team.category].push({ name: team.name, playerCount: 0 });
       });
       resolvedTeamsByCategory = mig;
     }
@@ -616,23 +641,21 @@ export default function App() {
     });
   };
 
-  const renameTeam = (cat: string, oldName: string, newName: string) => {
-    if (!newName.trim() || oldName === newName) return;
+  const updateTeam = (cat: string, oldName: string, updatedTeam: TeamData) => {
+    if (!updatedTeam.name.trim()) return;
     
-    // Update teamsByCategory
     const currentTeams = teamsByCategory[cat] || [];
     setTeamsByCategory({
       ...teamsByCategory,
-      [cat]: currentTeams.map(t => t === oldName ? newName : t)
+      [cat]: currentTeams.map(t => t.name === oldName ? { name: updatedTeam.name, playerCount: updatedTeam.playerCount } : t)
     });
 
-    // Update matches to persist scores and schedule
     setMatches(prev => prev.map(m => {
       if (m.category !== cat) return m;
       return {
         ...m,
-        team1: m.team1 === oldName ? newName : m.team1,
-        team2: m.team2 === oldName ? newName : m.team2
+        team1: m.team1 === oldName ? updatedTeam.name : m.team1,
+        team2: m.team2 === oldName ? updatedTeam.name : m.team2
       };
     }));
   };
@@ -1396,10 +1419,10 @@ export default function App() {
               </div>
               
               <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
-                {(Object.entries(teamsByCategory) as [string, string[]][]).filter(([_, list]) => list.length > 0).length === 0 ? (
+                {(Object.entries(teamsByCategory) as [string, TeamData[]][]).filter(([_, list]) => list.length > 0).length === 0 ? (
                   <p className="text-[9px] font-bold text-slate-400 italic text-center py-2">Sin equipos inscritos</p>
                 ) : (
-                  (Object.entries(teamsByCategory) as [string, string[]][]).map(([cat, list]) => (
+                  (Object.entries(teamsByCategory) as [string, TeamData[]][]).map(([cat, list]) => (
                     list.length > 0 && (
                       <div key={cat} className="flex items-center justify-between text-[10px]">
                         <span className="font-black text-slate-400">{cat}</span>
@@ -2075,7 +2098,7 @@ export default function App() {
               config={config}
               setConfig={setConfig}
               initialCategories={INITIAL_CATEGORIES}
-              onRenameTeam={renameTeam}
+              onUpdateTeam={updateTeam}
               isLocked={isLocked || hasScores}
             />
           ) : (

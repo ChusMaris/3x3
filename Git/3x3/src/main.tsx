@@ -2,6 +2,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import App from './App.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { AdminAuthGate } from './components/AdminAuthGate';
 import { PublicLivePage } from './components/PublicLivePage';
 import { supabase } from './lib/supabase';
@@ -190,7 +191,9 @@ const bootstrap = async () => {
             path="/admin"
             element={(
               <AdminAuthGate>
-                <App />
+                <ErrorBoundary>
+                  <App />
+                </ErrorBoundary>
               </AdminAuthGate>
             )}
           />

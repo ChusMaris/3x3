@@ -1,10 +1,12 @@
 import { useState } from 'react';
 
+import type { TeamData } from '../types/tournament';
+
 interface AddManualMatchFormProps {
   courtId: number;
   time: string;
   allowedCategories: string[];
-  teamsByCategory: Record<string, string[]>;
+  teamsByCategory: Record<string, TeamData[]>;
   onAdd: (courtId: number, time: string, category: string, t1: string, t2: string) => void;
 }
 
@@ -44,7 +46,7 @@ export function AddManualMatchForm({
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:border-[#e94560] outline-none transition-all appearance-none"
           >
             <option value="">Seleccionar equipo...</option>
-            {teamsInCat.map((t) => <option key={t} value={t}>{t}</option>)}
+            {teamsInCat.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
           </select>
         </div>
 
@@ -56,7 +58,7 @@ export function AddManualMatchForm({
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold focus:border-[#e94560] outline-none transition-all appearance-none"
           >
             <option value="">Seleccionar equipo...</option>
-            {teamsInCat.filter((t) => t !== t1).map((t) => <option key={t} value={t}>{t}</option>)}
+            {teamsInCat.filter((t) => t.name !== t1).map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
           </select>
         </div>
       </div>

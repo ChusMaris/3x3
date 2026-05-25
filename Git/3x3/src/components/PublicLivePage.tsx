@@ -44,6 +44,20 @@ const normalizeScore = (value: unknown): number | undefined => {
   return undefined;
 };
 
+const getTeamNames = (teams: unknown): string[] => {
+  if (!Array.isArray(teams)) return [];
+  return teams
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      if (typeof item === 'object' && item !== null) {
+        const source = item as Record<string, unknown>;
+        return typeof source.name === 'string' ? source.name : '';
+      }
+      return '';
+    })
+    .filter((name): name is string => Boolean(name));
+};
+
 const deserializeMatches = (matches: Match[]) =>
   matches.map((match) => ({
     ...match,
@@ -216,9 +230,9 @@ export function PublicLivePage() {
     const teamsByCategory = selectedTournament.data.teamsByCategory || {};
     const stats: Record<string, Record<string, TeamStats>> = {};
 
-    Object.entries(teamsByCategory).forEach(([category, teamNames]) => {
+    Object.entries(teamsByCategory).forEach(([category, teamItems]) => {
       stats[category] = {};
-      teamNames.forEach((name) => {
+      getTeamNames(teamItems).forEach((name) => {
         stats[category][name] = {
           name,
           pj: 0,

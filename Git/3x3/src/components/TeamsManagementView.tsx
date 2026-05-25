@@ -1,17 +1,18 @@
 import { useState } from 'react';
-import { Filter, Lock, Pencil, Plus, Trash2, Users, Eraser } from 'lucide-react';
+import { Filter, Lock, Pencil, Plus, Trash2, Users, Eraser, Check, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { CategoryMatchType, ScheduleConfig } from '../lib/scheduler';
+import type { TeamData } from '../types/tournament';
 
 interface TeamsManagementViewProps {
   appCategories: string[];
   setAppCategories: (cats: string[]) => void;
-  teamsByCategory: Record<string, string[]>;
-  setTeamsByCategory: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
+  teamsByCategory: Record<string, TeamData[]>;
+  setTeamsByCategory: React.Dispatch<React.SetStateAction<Record<string, TeamData[]>>>;
   config: ScheduleConfig;
   setConfig: React.Dispatch<React.SetStateAction<ScheduleConfig>>;
   initialCategories: string[];
-  onRenameTeam: (cat: string, oldName: string, newName: string) => void;
+  onUpdateTeam: (cat: string, oldName: string, updatedTeam: TeamData) => void;
   isLocked: boolean;
 }
 
@@ -23,28 +24,31 @@ export function TeamsManagementView({
   config,
   setConfig,
   initialCategories,
-  onRenameTeam,
+  onUpdateTeam,
   isLocked
 }: TeamsManagementViewProps) {
+
   const [newCatName, setNewCatName] = useState('');
-  const [newTeamInputs, setNewTeamInputs] = useState<Record<string, string>>({});
+  const [newTeamInputs, setNewTeamInputs] = useState<Record<string, { name: string; playerCount: string }>>({});
   const [editingTeam, setEditingTeam] = useState<{ cat: string, name: string } | null>(null);
-  const [editValue, setEditValue] = useState('');
+  const [editValue, setEditValue] = useState({ name: '', playerCount: '0' });
 
   const addCategory = () => {
-    if (newCatName && !appCategories.includes(newCatName)) {
-      setAppCategories([...appCategories, newCatName]);
-      setConfig(prev => ({
-        ...prev,
-        categoryConfig: {
-          ...(prev.categoryConfig || {}),
-          [newCatName]: {
-            matchType: 'Liga'
-          }
-        }
-      }));
+    const candidate = newCatName.trim();
+    if (!candidate) return;
+    if (appCategories.includes(candidate)) {
       setNewCatName('');
+      return;
     }
+    setAppCategories([...appCategories, candidate]);
+    setConfig(prev => ({
+      ...prev,
+      categoryConfig: {
+        ...(prev.categoryConfig || {}),
+        [candidate]: { ...(prev.categoryConfig?.[candidate] || {}) }
+      }
+    }));
+    setNewCatName('');
   };
 
   const removeCategory = (cat: string) => {
@@ -101,19 +105,21 @@ export function TeamsManagementView({
   };
 
   const addTeamToCategory = (cat: string) => {
-    const teamName = newTeamInputs[cat];
+    const input = newTeamInputs[cat] || { name: '', playerCount: '0' };
+    const teamName = input.name.trim();
+    const playerCount = Number.isFinite(Number(input.playerCount)) ? Math.max(0, Number(input.playerCount)) : 0;
     if (teamName) {
       setTeamsByCategory(prev => {
         const currentTeams = prev[cat] || [];
-        if (!currentTeams.includes(teamName)) {
+        if (!currentTeams.some(t => t.name === teamName)) {
           return {
             ...prev,
-            [cat]: [...currentTeams, teamName]
+            [cat]: [...currentTeams, { name: teamName, playerCount }]
           };
         }
         return prev;
       });
-      setNewTeamInputs({ ...newTeamInputs, [cat]: '' });
+      setNewTeamInputs({ ...newTeamInputs, [cat]: { name: '', playerCount: '0' } });
     }
   };
 
@@ -122,7 +128,7 @@ export function TeamsManagementView({
       const currentTeams = prev[cat] || [];
       return {
         ...prev,
-        [cat]: currentTeams.filter(t => t !== teamName)
+        [cat]: currentTeams.filter(t => t.name !== teamName)
       };
     });
   };
@@ -130,7 +136,7 @@ export function TeamsManagementView({
   const [confirmClear, setConfirmClear] = useState<string | null>(null);
 
   const clearTeamsInCategory = (cat: string) => {
-    setTeamsByCategory((prev: Record<string, string[]>) => {
+    setTeamsByCategory((prev: Record<string, TeamData[]>) => {
       const next = { ...prev };
       next[cat] = [];
       return next;
@@ -282,18 +288,39 @@ export function TeamsManagementView({
                   </div>
 
                   {!isLocked && (
-                    <div className="flex gap-1.5 md:gap-2">
+                    <div className="grid grid-cols-12 gap-2 md:gap-3">
                       <input
                         type="text"
-                        value={newTeamInputs[cat] || ''}
-                        onChange={e => setNewTeamInputs({ ...newTeamInputs, [cat]: e.target.value })}
+                        value={newTeamInputs[cat]?.name || ''}
+                        onChange={e => setNewTeamInputs({
+                          ...newTeamInputs,
+                          [cat]: {
+                            name: e.target.value,
+                            playerCount: newTeamInputs[cat]?.playerCount || '0'
+                          }
+                        })}
                         placeholder="Equipo..."
-                        className="flex-1 bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-2.5 text-[10px] md:text-xs font-bold focus:border-[#e94560] outline-none transition-all"
+                        className="col-span-7 bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-2.5 text-[10px] md:text-xs font-bold focus:border-[#e94560] outline-none transition-all"
+                        onKeyDown={e => e.key === 'Enter' && addTeamToCategory(cat)}
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        value={newTeamInputs[cat]?.playerCount || '0'}
+                        onChange={e => setNewTeamInputs({
+                          ...newTeamInputs,
+                          [cat]: {
+                            name: newTeamInputs[cat]?.name || '',
+                            playerCount: e.target.value
+                          }
+                        })}
+                        placeholder="Jugadores"
+                        className="col-span-3 bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl px-3 py-2 md:px-4 md:py-2.5 text-[10px] md:text-xs font-bold focus:border-[#e94560] outline-none transition-all"
                         onKeyDown={e => e.key === 'Enter' && addTeamToCategory(cat)}
                       />
                       <button
                         onClick={() => addTeamToCategory(cat)}
-                        className="bg-[#e94560] text-white p-2 md:p-2.5 rounded-lg md:rounded-xl hover:bg-[#ff516f] transition-all"
+                        className="col-span-2 bg-[#e94560] text-white p-2 md:p-2.5 rounded-lg md:rounded-xl hover:bg-[#ff516f] transition-all"
                       >
                         <Plus className="w-4 h-4 md:w-5 md:h-5" />
                       </button>
@@ -310,67 +337,100 @@ export function TeamsManagementView({
                         <motion.div
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
-                          key={`${cat}-${team}-${idx}`}
+                          key={`${cat}-${team.name}-${idx}`}
                           className="relative flex items-center p-2.5 bg-slate-50 rounded-xl group/team border border-transparent hover:border-[#e94560]/10 hover:bg-white hover:shadow-sm transition-all"
                         >
                           <div className="flex items-center gap-2.5 flex-1 min-w-0 h-8">
                             <span className="text-[10px] font-black text-slate-300 shrink-0">{(idx + 1).toString().padStart(2, '0')}</span>
-                            {editingTeam?.cat === cat && editingTeam?.name === team ? (
-                              <input
-                                autoFocus
-                                value={editValue}
-                                onChange={e => setEditValue(e.target.value)}
-                                onBlur={() => {
-                                  onRenameTeam(cat, team, editValue);
-                                  setEditingTeam(null);
-                                }}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') {
-                                    onRenameTeam(cat, team, editValue);
-                                    setEditingTeam(null);
-                                  }
-                                  if (e.key === 'Escape') setEditingTeam(null);
-                                }}
-                                className="flex-1 bg-white border border-[#e94560] rounded-lg px-2 h-full text-xs font-bold outline-none shadow-inner"
-                              />
-                            ) : (
-                              <span className="text-xs font-semibold text-slate-700 truncate pr-16 group-hover/team:text-[#1a1a2e] transition-colors">
-                                {team}
-                              </span>
-                            )}
-                          </div>
-                          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover/team:opacity-100 transition-all scale-95 group-hover/team:scale-100 bg-white/95 backdrop-blur-sm shadow-sm rounded-lg border border-slate-100 p-0.5 z-10">
-                            {isLocked ? (
-                              <div className="px-2 py-1 flex items-center gap-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 rounded-lg">
-                                <Lock className="w-2.5 h-2.5" />
-                                Fijado
+                                {editingTeam?.cat === cat && editingTeam?.name === team.name ? (
+                                  <div className="flex gap-2 w-full items-center pr-4">
+                                
+                                <input
+                                  autoFocus
+                                  value={editValue.name}
+                                  onChange={e => setEditValue(prev => ({ ...prev, name: e.target.value }))}
+                                  className="flex-1 bg-white border border-[#e94560] rounded-lg px-2 h-full text-xs font-bold outline-none shadow-inner"
+                                  placeholder="Nombre equipo"
+                                />
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={editValue.playerCount}
+                                  onChange={e => setEditValue(prev => ({ ...prev, playerCount: e.target.value }))}
+                                  className="w-20 bg-white border border-[#e94560] rounded-lg px-2 h-full text-xs font-bold outline-none shadow-inner"
+                                  placeholder="Jug."
+                                />
+                                <div className="ml-2 flex items-center gap-1">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const updatedName = editValue.name.trim();
+                                      const updatedCount = Number.isFinite(Number(editValue.playerCount)) ? Math.max(0, Number(editValue.playerCount)) : 0;
+                                      if (updatedName) {
+                                        onUpdateTeam(cat, team.name, { name: updatedName, playerCount: updatedCount });
+                                      }
+                                      setEditingTeam(null);
+                                    }}
+                                    className="text-slate-400 hover:text-[#e94560] hover:bg-[#e94560]/5 p-1 rounded-md transition-all"
+                                    title="Guardar"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingTeam(null);
+                                    }}
+                                    className="text-slate-400 hover:text-slate-700 hover:bg-slate-50 p-1 rounded-md transition-all"
+                                    title="Cancelar"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </div>
                             ) : (
-                              <>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingTeam({ cat, name: team });
-                                    setEditValue(team);
-                                  }}
-                                  className="text-slate-400 hover:text-[#e94560] hover:bg-[#e94560]/5 p-1.5 rounded-md transition-all"
-                                  title="Editar nombre"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    removeTeamFromCategory(cat, team);
-                                  }}
-                                  className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-all"
-                                  title="Eliminar equipo"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-xs font-semibold text-slate-700 truncate pr-16 group-hover/team:text-[#1a1a2e] transition-colors">
+                                  {team.name}
+                                </span>
+                                <p className="text-[10px] text-slate-400 mt-0.5">{team.playerCount} jugadores</p>
+                              </div>
                             )}
                           </div>
+                          {! (editingTeam?.cat === cat && editingTeam?.name === team.name) && (
+                            <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 pointer-events-none group-hover/team:opacity-100 group-hover/team:pointer-events-auto transition-all scale-95 group-hover/team:scale-100 bg-white/95 backdrop-blur-sm shadow-sm rounded-lg border border-slate-100 p-0.5 z-10">
+                              {isLocked ? (
+                                <div className="px-2 py-1 flex items-center gap-1.5 text-[8px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 rounded-lg">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  Fijado
+                                </div>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingTeam({ cat, name: team.name });
+                                      setEditValue({ name: team.name, playerCount: team.playerCount.toString() });
+                                    }}
+                                    className="text-slate-400 hover:text-[#e94560] hover:bg-[#e94560]/5 p-1.5 rounded-md transition-all"
+                                    title="Editar equipo"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeTeamFromCategory(cat, team.name);
+                                    }}
+                                    className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-all"
+                                    title="Eliminar equipo"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </motion.div>
                       ))
                     )}
