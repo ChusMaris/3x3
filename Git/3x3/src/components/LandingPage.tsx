@@ -8,7 +8,7 @@ interface LandingPageProps {
   tournaments: Tournament[];
   onSelect: (t: Tournament) => void;
   onCreate: (name: string, date: string) => void;
-  onDelete: (id: string) => void;
+  onDelete: (t: Tournament) => void;
   onLogout: () => Promise<void>;
   isLoading: boolean;
 }
@@ -180,13 +180,31 @@ export function LandingPage({ tournaments, onSelect, onCreate, onDelete, onLogou
                     </div>
                     <span className="text-[9px] font-black text-slate-500 uppercase">Gestión Activa</span>
                   </div>
-                  <button
-                    onClick={() => onDelete(t.id)}
-                    className="p-2 text-slate-600 hover:text-red-500 transition-colors"
-                    title="Eliminar torneo"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {(() => {
+                    const hasResults = (t.data.matches || []).some(
+                      m => m.score1 !== undefined || m.score2 !== undefined
+                    );
+                    const isProtected = Boolean(t.data.isLocked || hasResults);
+                    const message = isProtected
+                      ? `No se puede eliminar "${t.name}" porque ${t.data.isLocked ? 'está bloqueado para edición' : 'ya tiene resultados o está en curso'}.`
+                      : `Eliminar torneo ${t.name}`;
+
+                    return (
+                      <button
+                        onClick={() => {
+                          if (isProtected) {
+                            window.alert(message);
+                            return;
+                          }
+                          onDelete(t);
+                        }}
+                        className={`p-2 transition-colors ${isProtected ? 'text-slate-400 hover:text-slate-300' : 'text-slate-600 hover:text-red-500'}`}
+                        aria-label={message}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    );
+                  })()}
                 </div>
 
                 <div className="absolute top-2 right-2 text-white/5 font-black text-4xl select-none group-hover:opacity-20 transition-opacity">

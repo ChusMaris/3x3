@@ -117,6 +117,7 @@ export function PublicLivePage() {
           .from('tournaments')
           .select('id,name,event_date,data')
           .gte('event_date', today)
+          .is('deleted_at', null)
           .order('event_date', { ascending: true });
 
         if (fetchError) throw fetchError;

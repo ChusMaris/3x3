@@ -20,4 +20,5 @@ export interface Tournament {
   event_date: string;
   data: TournamentData;
   created_at: string;
+  deleted_at?: string | null;
 }

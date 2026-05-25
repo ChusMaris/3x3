@@ -8,10 +8,12 @@ CREATE TABLE IF NOT EXISTS public.tournaments (
   event_date DATE NOT NULL,
   data JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  deleted_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_tournaments_event_date ON public.tournaments(event_date);
+CREATE INDEX IF NOT EXISTS idx_tournaments_deleted_at ON public.tournaments(deleted_at);
 
 -- 2) Tabla de lista blanca de admins
 CREATE TABLE IF NOT EXISTS public.admin_users (
@@ -61,7 +63,8 @@ CREATE POLICY "Public can read active tournaments"
 ON public.tournaments
 FOR SELECT
 USING (
-  event_date >= current_date OR public.is_admin()
+  (event_date >= current_date OR public.is_admin())
+  AND deleted_at IS NULL
 );
 
 -- Admin autenticado: puede crear/editar/borrar

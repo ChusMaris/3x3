@@ -221,6 +221,7 @@ export default function App() {
       const { data, error } = await supabase
         .from('tournaments')
         .select('*')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -409,12 +410,25 @@ export default function App() {
     }
   };
 
+  const isTournamentProtected = (t: Tournament) => {
+    const hasResults = (t.data.matches || []).some(
+      m => m.score1 !== undefined || m.score2 !== undefined
+    );
+    return Boolean(t.data.isLocked || hasResults);
+  };
+
   const deleteTournament = async (id: string) => {
+    const tournament = tournaments.find(t => t.id === id);
+    if (tournament && isTournamentProtected(tournament)) {
+      setError('No se puede borrar un torneo que ya está jugado o en curso.');
+      return;
+    }
+
     try {
       setIsLoading(true);
       const { error } = await supabase
         .from('tournaments')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
 
       if (error) throw error;
@@ -430,6 +444,20 @@ export default function App() {
 
   const [filterTeams, setFilterTeams] = useState<string[]>([]);
   const [showTeamFilter, setShowTeamFilter] = useState(false);
+
+  const confirmAndDeleteTournament = async (tournament: Tournament) => {
+    if (isTournamentProtected(tournament)) {
+      setError('No se puede borrar un torneo que ya está jugado o en curso.');
+      return;
+    }
+
+    const shouldDelete = window.confirm(
+      `¿Eliminar el torneo "${tournament.name}"? Esta acción no se puede deshacer.`
+    );
+
+    if (!shouldDelete) return;
+    await deleteTournament(tournament.id);
+  };
 
   const teamNames = useMemo(() => {
     let filteredTeams = teams;
@@ -1091,7 +1119,7 @@ export default function App() {
         tournaments={tournaments} 
         onSelect={handleSelectTournament} 
         onCreate={createTournament} 
-        onDelete={deleteTournament}
+        onDelete={confirmAndDeleteTournament}
         onLogout={handleLogout}
         isLoading={isLoading}
       />
