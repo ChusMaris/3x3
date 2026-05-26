@@ -15,7 +15,7 @@ const authTrace = (step: string, payload?: Record<string, unknown>) => {
 // En modo desarrollo saltamos Supabase para poder probar la UI localmente
 const DEV_BYPASS = import.meta.env.DEV;
 
-const ADMIN_CHECK_TIMEOUT_MS = 8000;
+const ADMIN_CHECK_TIMEOUT_MS = 15000;
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
   return await Promise.race<T>([
@@ -45,15 +45,22 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
   const [email, setEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isTimeout, setIsTimeout] = useState(false);
 
-  const resolveAdminAuthorization = async () => {
+  const resolveAdminAuthorization = async (activeEmail?: string | null): Promise<boolean | null> => {
+    setIsTimeout(false);
     try {
       return await withTimeout(isAdmin(), ADMIN_CHECK_TIMEOUT_MS);
     } catch (err) {
+      const isTimeoutErr = err instanceof Error && err.message === 'admin-check-timeout';
       authTrace('gate:is-admin-timeout-or-error', {
         message: err instanceof Error ? err.message : String(err),
       });
       setError('No se pudo validar los permisos de admin a tiempo. Reintenta en unos segundos.');
+      if (isTimeoutErr && activeEmail) {
+        setIsTimeout(true);
+        return null;
+      }
       return false;
     }
   };
@@ -92,9 +99,9 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
         setEmail(sessionEmail);
 
         if (sessionEmail) {
-          const authorized = await resolveAdminAuthorization();
+          const authorized = await resolveAdminAuthorization(sessionEmail);
           if (!mounted) return;
-          setIsAuthorized(authorized);
+          if (authorized !== null) setIsAuthorized(authorized);
         } else {
           setIsAuthorized(false);
         }
@@ -122,12 +129,33 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
       });
       if (!mounted) return;
 
+      // TOKEN_REFRESHED: solo actualizar email; no re-validar admin para evitar
+      // que un cold-start de Supabase (>8 s) expulse al usuario con sesión válida.
+      if (_event === 'TOKEN_REFRESHED') {
+        authTrace('gate:token-refreshed-skip-admin-check', { email: session?.user?.email || null });
+        setEmail(session?.user?.email || null);
+        if (mounted) setIsLoading(false);
+        return;
+      }
+
+      // SIGNED_OUT: limpiar estado directamente sin llamar al RPC.
+      if (_event === 'SIGNED_OUT') {
+        authTrace('gate:signed-out', { event: _event });
+        setEmail(null);
+        setIsAuthorized(false);
+        setIsTimeout(false);
+        setError(null);
+        if (mounted) setIsLoading(false);
+        return;
+      }
+
+      // SIGNED_IN / INITIAL_SESSION: validar admin completo.
       setEmail(session?.user?.email || null);
       try {
         if (session?.user?.email) {
-          const authorized = await resolveAdminAuthorization();
+          const authorized = await resolveAdminAuthorization(session.user.email);
           if (!mounted) return;
-          setIsAuthorized(authorized);
+          if (authorized !== null) setIsAuthorized(authorized);
         } else {
           setIsAuthorized(false);
         }
@@ -190,12 +218,54 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
     );
   }
 
-  if (isLoading || isAuthorized === null) {
+  if (isLoading || (isAuthorized === null && !isTimeout)) {
     return (
       <div className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-slate-200">
           <Loader2 className="w-8 h-8 animate-spin text-[#22d3ee]" />
           <p className="text-xs uppercase tracking-[0.25em] font-black">Comprobando sesión admin</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isTimeout && email) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center px-6">
+        <div className="max-w-md w-full bg-[#111827] border border-amber-400/30 rounded-3xl p-8 space-y-5">
+          <div className="flex items-center gap-2 text-amber-300">
+            <ShieldAlert className="w-5 h-5" />
+            <p className="text-[10px] uppercase tracking-[0.25em] font-black">Error de conexión</p>
+          </div>
+          <h1 className="text-2xl font-black italic">No se pudieron validar los permisos</h1>
+          <p className="text-sm text-slate-300">
+            La comprobación de administrador tardó demasiado. Puede ser un problema temporal del servidor.
+          </p>
+          {error && (
+            <p className="text-sm text-amber-200 bg-amber-500/10 border border-amber-400/20 rounded-xl p-3">{error}</p>
+          )}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={async () => {
+                setError(null);
+                setIsLoading(true);
+                const authorized = await resolveAdminAuthorization(email);
+                if (authorized !== null) setIsAuthorized(authorized);
+                setIsLoading(false);
+              }}
+              className="flex-1 h-11 inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500/20 border border-cyan-400/30 text-cyan-200 text-sm font-black uppercase tracking-[0.15em] hover:bg-cyan-500/30 transition"
+            >
+              <Loader2 className="w-4 h-4" /> Reintentar
+            </button>
+            <button
+              type="button"
+              onClick={async () => { await signOutAdmin(); }}
+              className="inline-flex items-center gap-2 bg-slate-800 border border-white/10 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-[0.2em] hover:bg-slate-700 transition"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Salir
+            </button>
+          </div>
         </div>
       </div>
     );

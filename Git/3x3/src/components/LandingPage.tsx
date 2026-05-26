@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar, Loader2, Plus, Settings, Trash2, Trophy, LogOut } from 'lucide-react';
+import { Calendar, Loader2, Plus, Settings, Trash2, Trophy } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { isSupabaseConfigured } from '../lib/supabase';
 import type { Tournament } from '../types/tournament';
@@ -9,11 +9,10 @@ interface LandingPageProps {
   onSelect: (t: Tournament) => void;
   onCreate: (name: string, date: string) => void;
   onDelete: (t: Tournament) => void;
-  onLogout: () => Promise<void>;
   isLoading: boolean;
 }
 
-export function LandingPage({ tournaments, onSelect, onCreate, onDelete, onLogout, isLoading }: LandingPageProps) {
+export function LandingPage({ tournaments, onSelect, onCreate, onDelete, isLoading }: LandingPageProps) {
   const [newTournamentName, setNewTournamentName] = useState('');
   const [newTournamentDate, setNewTournamentDate] = useState(new Date().toISOString().split('T')[0]);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -63,12 +62,7 @@ export function LandingPage({ tournaments, onSelect, onCreate, onDelete, onLogou
             >
               {showCreateForm ? 'CANCELAR' : <><Plus className="w-4 h-4" /> NUEVO TORNEO</>}
             </button>
-            <button
-              onClick={onLogout}
-              className="flex items-center gap-2 bg-slate-800 text-white px-5 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-700 transition-all shadow-xl active:scale-95"
-            >
-              <LogOut className="w-4 h-4" /> CERRAR SESIÓN
-            </button>
+
           </div>
         </div>
 

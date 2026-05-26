@@ -49,6 +49,7 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder-url.supabase.co',
   supabaseAnonKey || 'placeholder-key',
+  { auth: { storageKey: 'sb-3x3-session' } },
 );
 
 export const isAdmin = async (): Promise<boolean> => {

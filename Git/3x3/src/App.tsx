@@ -35,7 +35,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { generateSchedule, parseTeams, Team, Match, ScheduleConfig, formatTime, CategoryMatchType } from './lib/scheduler';
-import { supabase, isSupabaseConfigured, signOutAdmin } from './lib/supabase';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { TeamsManagementView } from './components/TeamsManagementView';
 import { CourtsManagementView } from './components/CourtsManagementView';
 import { ClassificationTable } from './components/ClassificationTable';
@@ -954,11 +954,6 @@ export default function App() {
     }
   };
 
-  const handleLogout = async () => {
-    await signOutAdmin();
-    window.location.href = `${window.location.origin}${window.location.pathname}#/admin`;
-  };
-
   const isCurrentTournamentActive = useMemo(() => {
     if (!currentTournament?.event_date) return false;
     const today = new Date();
@@ -1120,7 +1115,6 @@ export default function App() {
         onSelect={handleSelectTournament} 
         onCreate={createTournament} 
         onDelete={confirmAndDeleteTournament}
-        onLogout={handleLogout}
         isLoading={isLoading}
       />
     );
