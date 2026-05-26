@@ -1,0 +1,41 @@
+schema: spec-driven
+
+context: |
+  Proyecto: 3x3 Hub — gestión y seguimiento en tiempo real de torneos de baloncesto 3x3.
+  
+  Tech stack:
+  - Frontend: React 19, TypeScript ~5.8, Vite 6
+  - Estilos: Tailwind CSS 4 (plugin Vite, no PostCSS)
+  - Routing: React Router DOM 7 con HashRouter (GitHub Pages, base /3x3/)
+  - Animaciones: Motion/react (Framer Motion v12)
+  - Iconos: Lucide React
+  - QR: qrcode.react
+  - Backend/DB: Supabase (PostgreSQL + Auth + RLS)
+  - Auth: Google OAuth gestionado por Supabase
+  - IA generativa: @google/genai (Gemini)
+  - Despliegue: GitHub Pages via gh-pages
+
+  Arquitectura:
+  - SPA estática sin servidor propio
+  - Dos zonas: /#/live (público, solo lectura) y /#/admin (admin autenticado)
+  - Seguridad en BD: Row Level Security en Supabase + función is_admin() SECURITY DEFINER
+  - Admin requiere Google OAuth + email en tabla admin_users (doble factor)
+  - Datos del torneo almacenados en columna JSONB (campo data)
+  - Soft-delete con deleted_at; nunca borrado físico de torneos
+  - DEV_BYPASS en AdminAuthGate: en modo dev se omite la auth para iterar rápido
+
+  Convenciones:
+  - Idioma UI: español (preservar acentos y textos tal cual, sin alterar)
+  - Componentes en src/components/, lógica pura en src/lib/, tipos en src/types/
+  - Variables de entorno con prefijo VITE_ (expuestas al bundle); secretos en .env.local
+  - Commits en español o inglés, sin convención estricta de formato
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
