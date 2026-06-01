@@ -44,6 +44,7 @@ import { LandingPage } from './components/LandingPage';
 import { AddManualMatchForm } from './components/AddManualMatchForm';
 import { INITIAL_CATEGORIES, createDefaultScheduleConfig } from './constants/tournament';
 import { getCatStyles } from './utils/categoryStyles';
+import brafaLogo from '../images/logo.jpeg';
 import type { Tournament, TeamData } from './types/tournament';
 
 type ViewMode = 'calendar' | 'grid' | 'classification';
@@ -1516,19 +1517,33 @@ export default function App() {
         {/* Content Area */}
         <section id="printable-content" className="flex-1 bg-slate-100 overflow-hidden flex flex-col min-w-0">
           {/* Tournament Actions Bar */}
-          <div className="bg-white border-b border-slate-200 px-4 md:px-8 py-1 md:py-2 flex items-center justify-between shrink-0 gap-2 md:gap-4 overflow-x-auto no-scrollbar short-hidden">
+          {/* Print-only header — cabecera idéntica al PDF de ejemplo */}
+          <div className="print-brafa-header">
+            <div className="print-brafa-header-left">
+              {/* Logo BRAFA oficial */}
+              <div className="print-brafa-logo">
+                <img src={brafaLogo} alt="BRAFA" className="print-brafa-rings" />
+                <div className="print-brafa-brand">
+                  <span className="print-brafa-title-big">FUNDACIÓ BRAFA</span>
+                  <span className="print-brafa-subtitle-small">ESCOLA ESPORTIVA • TORNEIG DEL {currentTournament ? new Date(currentTournament.event_date).toLocaleDateString('ca-ES', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase() : ''}</span>
+                  <span className="print-brafa-subtitle-small">Quadrant oficial i horaris de partits per al {currentTournament ? currentTournament.name : ''}</span>
+                </div>
+              </div>
+            </div>
+            <div className="print-brafa-header-right">
+              <span className="print-brafa-location-label">UBICACIÓ</span>
+              <span className="print-brafa-location-name">Pistes Brafa Nou Barris</span>
+              <span className="print-brafa-location-city">Barcelona, Catalunya</span>
+            </div>
+          </div>
+
+          {/* Tournament Actions Bar */}
+          <div className="bg-white border-b border-slate-200 px-4 md:px-8 py-1 md:py-2 flex items-center justify-between shrink-0 gap-2 md:gap-4 overflow-x-auto no-scrollbar short-hidden no-print">
             <div className="flex items-center gap-3">
               <div className="flex flex-col">
-                <h2 className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap print:text-lg print:text-slate-900">
+                <h2 className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap no-print">
                   {tournamentView === 'teams' ? 'Equipos' : viewMode === 'grid' ? 'Vista Pistas' : viewMode === 'calendar' ? 'Calendario' : 'Clasificación'}
                 </h2>
-                <div className="flex items-center gap-3 mt-1 text-[8px] font-bold text-slate-500 print-only print:text-xs">
-                  <span>{resolvedMatches.length} Partidos</span>
-                  <span className="w-1 h-1 rounded-full bg-slate-300" />
-                  <span>{config.courtConfigs.length} Pistas</span>
-                  <span className="w-1 h-1 rounded-full bg-slate-300" />
-                  <span>{new Date().toLocaleDateString()}</span>
-                </div>
               </div>
               {resolvedMatches.length > 0 && (
                 <div className="flex items-center gap-1.5 px-2 py-0.5 md:py-1 bg-slate-100 rounded-full border border-slate-200 shadow-sm shrink-0 no-print">
@@ -1578,7 +1593,7 @@ export default function App() {
             ) : (
               <div className="flex-1 flex flex-col relative min-h-0">
                 {/* Unified Header with Toggle and Filters */}
-                <div className="bg-white border-b border-slate-200 p-1 md:p-2.5 flex flex-wrap items-center justify-between gap-2 md:gap-3 shrink-0 px-4 md:px-8 shadow-sm z-[100] short-compact">
+                <div className="bg-white border-b border-slate-200 p-1 md:p-2.5 flex flex-wrap items-center justify-between gap-2 md:gap-3 shrink-0 px-4 md:px-8 shadow-sm z-[100] short-compact no-print">
                     {(viewMode === 'grid' || viewMode === 'calendar') && (
                       <div className="flex bg-slate-100 p-0.5 md:p-1 rounded-lg md:rounded-xl shrink-0">
                         <button 
@@ -1797,7 +1812,7 @@ export default function App() {
                         
                         {viewMode === 'grid' ? (
                           <div className="flex-1 min-h-0 overflow-auto bg-slate-300/50 custom-scrollbar">
-                            <div className="min-w-max flex flex-col">
+                            <div className="min-w-max flex flex-col pb-24">
                               {/* Sticky Header now inside the scrollable area */}
                               <div 
                                 className="flex sticky top-0 z-30 bg-[#1a1a2e] text-slate-400 text-[8px] md:text-[10px] font-black uppercase tracking-widest border-b border-slate-800 select-none shadow-md short-compact"
@@ -2145,6 +2160,43 @@ export default function App() {
         </div>
         <div></div>
       </footer>
+
+      {/* Print-only legend footer */}
+      <div className="print-brafa-legend">
+        <div className="print-brafa-legend-title">LLEGENDA DE CATEGORIES DE BÀSQUET</div>
+        {categories.map(cat => {
+          const styles = getCatStyles(cat);
+          const labelMap: Record<string, string> = {
+            'BEN M': 'Benjamí Masculí (Bàsquet)',
+            'BEN F': 'Benjamí Femení (Bàsquet)',
+            'ALV M': 'Aleví Masculí (Bàsquet)',
+            'ALV F': 'Aleví Femení (Bàsquet)',
+            'INF M': 'Infantil Masculí (Bàsquet)',
+            'INF F': 'Infantil Femení (Bàsquet)',
+            'INF /': 'Infantil Femení / Mixt (Bàsquet)',
+            'CAD M': 'Cadet Masculí (Bàsquet)',
+            'CAD F': 'Cadet Femení (Bàsquet)',
+            'JUN M': 'Júnior Masculí (Bàsquet)',
+            'JUN F': 'Júnior Femení (Bàsquet)',
+            'JUN': 'Júnior (Bàsquet)',
+            'SEN M': 'Sènior Masculí (Bàsquet)',
+            'SEN F': 'Sènior Femení (Bàsquet)',
+          };
+          const label = labelMap[cat] || cat;
+          return (
+            <div key={cat} className={`print-brafa-legend-item ${styles}`}>
+              <span className="print-brafa-legend-code">{cat}</span>
+              <span className="print-brafa-legend-label">({label})</span>
+            </div>
+          );
+        })}
+        <div className="print-brafa-legend-item print-brafa-legend-finals">
+          <span className="print-brafa-legend-code">Finals ⭐</span>
+        </div>
+        <div className="print-brafa-legend-generated">
+          🏀 Generat el {new Date().toLocaleDateString('ca-ES', { day: 'numeric', month: 'numeric', year: 'numeric' })}
+        </div>
+      </div>
 
       <AnimatePresence>
         {isQrModalOpen && currentTournament && (
