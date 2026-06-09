@@ -21,8 +21,8 @@
 ## 4. Verificación manual end-to-end
 
 - [x] 4.1 Desplegar la build de 3x3 y comprobar que un admin puede permanecer logado más de 1 hora sin ser expulsado (o simular el evento `TOKEN_REFRESHED` desde DevTools Supabase / debug)
-- [ ] 4.2 Abrir 3x3 y DBStats en el mismo navegador y verificar que las acciones de auth en una app no afectan a la otra (comprobar que las claves `localStorage` son distintas)
-- [ ] 4.3 Hacer logout en 3x3 y confirmar que DBStats sigue cargando datos correctamente sin necesidad de borrar caché
+- [x] 4.2 Abrir 3x3 y DBStats en el mismo navegador y verificar que las acciones de auth en una app no afectan a la otra (comprobar que las claves `localStorage` son distintas)
+- [x] 4.3 Hacer logout en 3x3 y confirmar que DBStats sigue cargando datos correctamente sin necesidad de borrar caché
 
 ## 5. Admin status caching (prevención de multi-tab expulsion) [NUEVA SOLUCIÓN]
 
