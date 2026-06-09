@@ -20,6 +20,14 @@
 
 ## 4. Verificación manual end-to-end
 
-- [ ] 4.1 Desplegar la build de 3x3 y comprobar que un admin puede permanecer logado más de 1 hora sin ser expulsado (o simular el evento `TOKEN_REFRESHED` desde DevTools Supabase / debug)
+- [x] 4.1 Desplegar la build de 3x3 y comprobar que un admin puede permanecer logado más de 1 hora sin ser expulsado (o simular el evento `TOKEN_REFRESHED` desde DevTools Supabase / debug)
 - [ ] 4.2 Abrir 3x3 y DBStats en el mismo navegador y verificar que las acciones de auth en una app no afectan a la otra (comprobar que las claves `localStorage` son distintas)
 - [ ] 4.3 Hacer logout en 3x3 y confirmar que DBStats sigue cargando datos correctamente sin necesidad de borrar caché
+
+## 5. Admin status caching (prevención de multi-tab expulsion) [NUEVA SOLUCIÓN]
+
+- [x] 5.1 En `src/lib/supabase.ts`, agregar variables de caché (`adminCacheTTL`, `adminCacheValue`) con TTL de 30 minutos
+- [x] 5.2 Crear BroadcastChannel('admin-auth-cache') para sincronizar validación de admin entre pestañas
+- [x] 5.3 Modificar `isAdmin()` para consultar caché primero y solo llamar al RPC si caché expiró
+- [x] 5.4 Al obtener resultado del RPC, almacenar en caché y notificar otras pestañas via BroadcastChannel
+![alt text](image.png)

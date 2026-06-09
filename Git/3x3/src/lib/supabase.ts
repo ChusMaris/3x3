@@ -52,14 +52,61 @@ export const supabase = createClient(
   { auth: { storageKey: 'sb-3x3-session' } },
 );
 
+// Admin cache con TTL para evitar revalidación frecuente entre pestañas
+let adminCacheTTL = 0;
+let adminCacheValue: boolean | null = null;
+const ADMIN_CACHE_MS = 30 * 60 * 1000; // 30 minutos
+
+// BroadcastChannel para sincronizar caché entre pestañas
+const adminBroadcast = typeof window !== 'undefined' ? new BroadcastChannel('admin-auth-cache') : null;
+
+if (adminBroadcast) {
+  adminBroadcast.onmessage = (event) => {
+    if (event.data?.type === 'admin-validated') {
+      adminCacheValue = event.data.result;
+      adminCacheTTL = Date.now() + ADMIN_CACHE_MS;
+      authTrace('is-admin:cache-sync-from-broadcast', {
+        result: adminCacheValue,
+        ttlExpires: new Date(adminCacheTTL).toISOString(),
+      });
+    }
+  };
+}
+
 export const isAdmin = async (): Promise<boolean> => {
+  // Verificar caché primero
+  if (adminCacheTTL > Date.now() && adminCacheValue !== null) {
+    authTrace('is-admin:cache-hit', {
+      result: adminCacheValue,
+      ttlExpires: new Date(adminCacheTTL).toISOString(),
+    });
+    return adminCacheValue;
+  }
+
   try {
     const { data, error } = await supabase.rpc('is_admin');
     if (error) {
       console.error('Error checking admin status:', error);
       return false;
     }
-    return Boolean(data);
+    const result = Boolean(data);
+
+    // Almacenar en caché y notificar otras pestañas
+    adminCacheValue = result;
+    adminCacheTTL = Date.now() + ADMIN_CACHE_MS;
+    if (adminBroadcast) {
+      adminBroadcast.postMessage({
+        type: 'admin-validated',
+        result,
+        timestamp: Date.now(),
+      });
+    }
+    authTrace('is-admin:cache-store', {
+      result,
+      ttlExpires: new Date(adminCacheTTL).toISOString(),
+    });
+
+    return result;
   } catch (error) {
     console.error('Error calling is_admin RPC:', error);
     return false;
