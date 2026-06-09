@@ -9,6 +9,8 @@
 - [x] 2.1 En `src/components/AdminAuthGate.tsx`, actualizar el listener `onAuthStateChange` para que solo llame a `resolveAdminAuthorization()` en los eventos `SIGNED_IN` e `INITIAL_SESSION`
 - [x] 2.2 Para el evento `SIGNED_OUT` (y `USER_DELETED` si aplica), limpiar `email`, `isAuthorized` a `false` e `isLoading` a `false` directamente, sin llamar al RPC
 - [x] 2.3 Para el evento `TOKEN_REFRESHED`, actualizar solo `email` con el email de la sesión renovada pero sin cambiar `isAuthorized`
+- [x] 2.4 (CORRECCIÓN - Causa Raíz) En `src/components/AdminAuthGate.tsx`, agregar filtro explícito: después de checks TOKEN_REFRESHED y SIGNED_OUT, insertar `if (_event !== 'SIGNED_IN' && _event !== 'INITIAL_SESSION') { return; }` para ignorar otros eventos raros de Supabase
+- [x] 2.4b Agregar logging para eventos ignorados: `authTrace('gate:auth-event-ignored', { event: _event, reason: 'not-sign-in-or-initial' })`
 
 ## 3. Ajuste del timeout y comportamiento ante latencia
 

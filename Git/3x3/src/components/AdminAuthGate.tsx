@@ -149,6 +149,15 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
         return;
       }
 
+      // ⭐ CORRECCIÓN CRÍTICA: Solo procesar SIGNED_IN e INITIAL_SESSION.
+      // Ignorar silenciosamente otros eventos raros (USER_UPDATED, MFA_CHALLENGE_VERIFIED, etc)
+      // que podrían disparar validación de admin innecesariamente y causar expulsión esporádica.
+      if (_event !== 'SIGNED_IN' && _event !== 'INITIAL_SESSION') {
+        authTrace('gate:auth-event-ignored', { event: _event, reason: 'not-sign-in-or-initial' });
+        if (mounted) setIsLoading(false);
+        return;
+      }
+
       // SIGNED_IN / INITIAL_SESSION: validar admin completo.
       setEmail(session?.user?.email || null);
       try {
