@@ -27,7 +27,6 @@ ALV M,Las Panteras
 ALV M,Tralalelitos
 ALV F,Bombastic side eye
 ALV F,Patatas fritas
-ALV F,Brafa girls
 INF F,The panthers
 INF F,Queen tigers
 INF F,Cookies

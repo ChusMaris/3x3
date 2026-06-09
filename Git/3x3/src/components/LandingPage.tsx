@@ -38,7 +38,7 @@ export function LandingPage({ tournaments, onSelect, onCreate, onDelete, isLoadi
           transition={{ delay: 0.1 }}
           className="text-5xl font-black italic tracking-tighter uppercase mb-2"
         >
-          BRAFA 3x3 <span className="text-[#e94560]">HUB</span>
+          3x3 TOURNAMENT <span className="text-[#e94560]">HUB</span>
         </motion.h1>
         <motion.p
           initial={{ y: -10, opacity: 0 }}
@@ -212,7 +212,7 @@ export function LandingPage({ tournaments, onSelect, onCreate, onDelete, isLoadi
 
       <footer className="relative z-10 py-8 px-8 border-t border-white/5 text-center">
         <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em]">
-          Powered by BRAFA Technology · {new Date().getFullYear()}
+          Tournament Management System · {new Date().getFullYear()}
         </p>
       </footer>
     </div>
