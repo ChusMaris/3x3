@@ -8,19 +8,15 @@ Este proyecto está configurado para desplegarse automáticamente en GitHub Page
 
 1. Ve a **Settings** en tu repositorio GitHub
 2. En el menú lateral, selecciona **Pages** (bajo "Code and automation")
-3. En **Source**, selecciona:
-   - **Deploy from a branch**
-4. En **Branch**, selecciona:
-   - Rama: `main` (o `master` según tu rama por defecto)
-   - Carpeta: `/ (root)`
-5. Haz clic en **Save**
+3. En **Build and deployment** -> **Source**, selecciona:
+   - **GitHub Actions**
+4. Haz clic en **Save** (si aparece)
 
 ### 2. Verificar permisos de GitHub Actions
 
 1. Ve a **Settings** → **Actions** → **General**
 2. En **Workflow permissions**, selecciona:
    - **Read and write permissions**
-   - ✅ Marca: "Allow GitHub Actions to create and approve pull requests"
 3. Haz clic en **Save**
 
 ### 3. Hacer push de los cambios
