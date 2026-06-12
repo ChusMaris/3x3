@@ -1,6 +1,0 @@
-{
-  "name": "Extractor de URLs de Estadísticas",
-  "description": "Herramienta para extraer enlaces de estadísticas de la Federación Catalana de Baloncesto a partir de una URL y exportar los resultados en formato CSV o JSON.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
